@@ -1,12 +1,17 @@
 import geopandas as gpd
-import pandas as pd
-from shapely.geometry import Point
 from typing import Optional, Dict, Callable, List
+
+import numpy as np
+from shapely.geometry import base
+import pandas as pd
 
 
 class LayerDGA:
     """按图层标识创建单例的GeoPackage图层操作类"""
     _instances: Dict[str, "LayerDGA"] = {}  # 存储{图层标识: 实例}的映射
+    gpkg_path: str
+    layer_name: str
+    _gdf: Optional[gpd.GeoDataFrame]
 
     def __new__(cls, gpkg_path: str, layer_name: str):
         """
@@ -22,7 +27,7 @@ class LayerDGA:
             # 初始化实例属性
             cls._instances[instance_key].gpkg_path = gpkg_path
             cls._instances[instance_key].layer_name = layer_name
-            cls._instances[instance_key]._gdf: Optional[gpd.GeoDataFrame] = None  # 缓存当前图层的GeoDataFrame
+            cls._instances[instance_key]._gdf = None  # 缓存当前图层的GeoDataFrame
             # 加载图层数据
             cls._instances[instance_key]._load_layer()
         return cls._instances[instance_key]
@@ -43,60 +48,75 @@ class LayerDGA:
             self._load_layer()
         return self._gdf
 
-    def query_by_attribute(self, condition) -> Optional[gpd.GeoDataFrame]:
-        """属性查询（返回符合条件的子集）"""
-        if self.gdf is None:
-            return None
-        return self.gdf[condition].copy()
-
-    def query_by_spatial(self, spatial_func) -> Optional[gpd.GeoDataFrame]:
-        """空间查询（返回符合空间条件的子集）"""
-        if self.gdf is None:
-            return None
-        return self.gdf[spatial_func(self.gdf)].copy()
-
-    def save(self, overwrite: bool = True):
-        """保存当前图层（覆盖原图层）"""
-        if self.gdf is None:
-            print("无数据可保存")
-            return
-        # 保存图层（覆盖模式）
-        self.gdf.to_file(
-            self.gpkg_path,
-            layer=self.layer_name,
-            driver="GPKG",
-            mode="a",
-            append=not overwrite  # overwrite=True时append=False（覆盖）
-        )
-        print(f"图层已保存：{self.layer_name}@{self.gpkg_path}")
-
-    def refresh(self):
-        """重新加载图层数据（刷新缓存）"""
-        self._load_layer()
-
     # --------------------------
     # 新增：数据更新方法
     # --------------------------
-    def update_attributes(self, condition: Callable, field: str, new_value) -> bool:
+    # def update_attributes(self, condition: Callable, field: str, new_value) -> bool:
+    #     """
+    #     按条件更新指定字段的值
+    #     :param condition: 筛选条件（如：lambda gdf: gdf["level"] == 1）
+    #     :param field: 要更新的字段名
+    #     :param new_value: 新值（可是固定值或与字段长度匹配的列表/数组）
+    #     :return: 更新成功返回True，失败返回False
+    #     """
+    #     if self.gdf is None or field not in self.gdf.columns:
+    #         print(f"图层为空或字段不存在：{field}")
+    #         return False
+    #
+    #     # 筛选符合条件的行并更新字段值
+    #     mask = condition(self.gdf)
+    #     if not mask.any():
+    #         print("无符合条件的要素可更新")
+    #         return True
+    #
+    #     self._gdf.loc[mask, field] = new_value
+    #     print(f"已更新 {mask.sum()} 个要素的 {field} 字段")
+    #     return True
+
+    def update_attributes(self,
+                          condition: Callable,
+                          field: str,
+                          new_value,
+                          value_processor: Optional[Callable] = None) -> bool:
         """
-        按条件更新指定字段的值
+        按条件更新指定字段的值（支持处理空值/非数字值）
         :param condition: 筛选条件（如：lambda gdf: gdf["level"] == 1）
-        :param field: 要更新的字段名
-        :param new_value: 新值（可是固定值或与字段长度匹配的列表/数组）
-        :return: 更新成功返回True，失败返回False
+        :param field: 要更新的字段名（A字段）
+        :param new_value: 新值表达式（如：gdf["B"] + 10）
+        :param value_processor: 值处理器（可选），用于清洗new_value中的无效值
+                                （如：lambda x: x.fillna(0) 填充空值为0）
+        :return: 更新成功返回True
         """
         if self.gdf is None or field not in self.gdf.columns:
             print(f"图层为空或字段不存在：{field}")
             return False
 
-        # 筛选符合条件的行并更新字段值
+        # 筛选符合条件的行
         mask = condition(self.gdf)
         if not mask.any():
             print("无符合条件的要素可更新")
             return True
 
-        self._gdf.loc[mask, field] = new_value
-        print(f"已更新 {mask.sum()} 个要素的 {field} 字段")
+        # 计算原始新值（可能包含空值/非数字）
+        raw_new_value = new_value
+
+        # 应用值处理器（清洗无效值）
+        if value_processor is not None:
+            processed_new_value = value_processor(raw_new_value)
+        else:
+            processed_new_value = raw_new_value
+
+        # 仅更新符合条件的行
+        self._gdf.loc[mask, field] = processed_new_value
+
+        # 统计有效更新数量（排除因无效值导致的未更新）
+        if isinstance(processed_new_value, (pd.Series, np.ndarray)):
+            # 数组类型：用 isna() 判断空值
+            valid_mask = mask & ~processed_new_value.isna()
+        else:
+            # 单个值（如 int/float）：非空即有效
+            valid_mask = mask  # 单个值无空值问题，直接使用原始条件掩码
+        print(f"已更新 {valid_mask.sum()} 个要素的 {field} 字段（总符合条件 {mask.sum()} 个）")
         return True
 
     def add_features(self, new_features: gpd.GeoDataFrame) -> bool:
@@ -162,7 +182,7 @@ class LayerDGA:
                 self.gpkg_path,
                 layer=self.layer_name,
                 driver="GPKG",
-                mode="a",
+                mode="w",
                 append=not overwrite
             )
             print(f"修改已同步到文件：{self.gpkg_path}（图层：{self.layer_name}）")
@@ -170,6 +190,131 @@ class LayerDGA:
         except Exception as e:
             print(f"保存失败：{e}")
             return False
+
+    # --------------------------
+    # 新增：按条件查询要素集合
+    # --------------------------
+    def get_features_by_condition(self, condition: Callable) -> Optional[gpd.GeoDataFrame]:
+        """
+        根据条件查询要素集合（返回符合条件的GeoDataFrame，即feature集合）
+        :param condition: 条件函数，接收gdf并返回布尔索引（如：lambda gdf: gdf["voltage"] > 10）
+        :return: 符合条件的要素集合（GeoDataFrame），无结果则返回空GeoDataFrame
+        """
+        if self.gdf is None:
+            print("图层数据为空，无法查询")
+            return None
+
+        # 应用条件筛选
+        filtered_gdf = self.gdf[condition(self.gdf)].copy()
+        print(f"查询到 {len(filtered_gdf)} 个符合条件的要素")
+        return filtered_gdf
+
+    # 便捷方法：属性查询（简化常用场景）
+    def get_features_by_attribute(self, field: str, op: str, value) -> Optional[gpd.GeoDataFrame]:
+        """
+        按属性条件查询（如：field="voltage", op=">", value=10）
+        :param field: 字段名
+        :param op: 运算符（">", "<", "==", "contains"等）
+        :param value: 比较值
+        :return: 符合条件的要素集合
+        """
+        if self.gdf is None or field not in self.gdf.columns:
+            print(f"字段不存在或图层为空：{field}")
+            return None
+
+        # 构建条件（支持常见运算符）
+        if op == ">":
+            condition = self.gdf[field] > value
+        elif op == "<":
+            condition = self.gdf[field] < value
+        elif op == "==":
+            condition = self.gdf[field] == value
+        elif op == "contains":
+            # 文本包含（需字段为字符串类型）
+            condition = self.gdf[field].astype(str).str.contains(str(value))
+        else:
+            print(f"不支持的运算符：{op}")
+            return None
+
+        filtered_gdf = self.gdf[condition].copy()
+        print(f"属性查询到 {len(filtered_gdf)} 个要素")
+        return filtered_gdf
+
+    # 便捷方法：空间查询（简化常用场景）
+    def get_features_by_spatial(self, spatial_op: str, geometry) -> Optional[gpd.GeoDataFrame]:
+        """
+        按空间条件查询（如：包含、相交、距离小于等）
+        :param spatial_op: 空间运算符（"contains", "intersects", "distance_lt"等）
+        :param geometry: 参考几何对象（如Point, Polygon）
+        :return: 符合条件的要素集合
+        """
+        if self.gdf is None:
+            print("图层数据为空，无法查询")
+            return None
+
+        # 确保几何对象与图层坐标系一致
+        if self.gdf.crs != geometry.crs:
+            geometry = geometry.to_crs(self.gdf.crs)
+
+        # 构建空间条件
+        if spatial_op == "contains":
+            # 图层要素包含参考几何
+            condition = self.gdf.geometry.contains(geometry)
+        elif spatial_op == "intersects":
+            # 图层要素与参考几何相交
+            condition = self.gdf.geometry.intersects(geometry)
+        elif spatial_op == "distance_lt":
+            # 图层要素与参考几何的距离小于指定值（需米制坐标系）
+            distance = geometry  # 此时geometry参数传入距离值（如1000米）
+            condition = self.gdf.geometry.distance(geometry) < distance
+        else:
+            print(f"不支持的空间运算符：{spatial_op}")
+            return None
+
+        filtered_gdf = self.gdf[condition].copy()
+        print(f"空间查询到 {len(filtered_gdf)} 个要素")
+        return filtered_gdf
+
+    # --------------------------
+    # 旧的查询方法
+    # --------------------------
+    def query_by_attribute(self, condition) -> Optional[gpd.GeoDataFrame]:
+        """属性查询（返回符合条件的子集）"""
+        if self.gdf is None:
+            return None
+        return self.gdf[condition].copy()
+
+    # --------------------------
+    # 旧的查询方法
+    # --------------------------
+    def query_by_spatial(self, spatial_func) -> Optional[gpd.GeoDataFrame]:
+        """空间查询（返回符合空间条件的子集）"""
+        if self.gdf is None:
+            return None
+        return self.gdf[spatial_func(self.gdf)].copy()
+
+    # --------------------------
+    # 旧的保存方法
+    # --------------------------
+    def save(self, overwrite: bool = True):
+        """保存当前图层（覆盖原图层）"""
+        if self.gdf is None:
+            print("无数据可保存")
+            return
+        # 保存图层（覆盖模式）
+        self.gdf.to_file(
+            self.gpkg_path,
+            layer=self.layer_name,
+            driver="GPKG",
+            mode="a",
+            append=not overwrite  # overwrite=True时append=False（覆盖）
+        )
+        print(f"图层已保存：{self.layer_name}@{self.gpkg_path}")
+
+    def refresh(self):
+        """重新加载图层数据（刷新缓存）"""
+        self._load_layer()
+
 # 使用示例
 if __name__ == "__main__":
     # 1. 创建cable图层的单例实例
