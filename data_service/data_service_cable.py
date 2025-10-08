@@ -12,29 +12,22 @@ def _gda():
 __gda = _gda()
 
 
-def get_all_SRO():
-    cable_dga = _gda()
-
-
-def get_all_distribution_1():
-    return __gda.query_by_attribute(__gda.gdf["level"] == 1)
-
-
-def get_all_distribution_1_start_with_SRO(sro_code):
-    def custom_condition(gdf):
-        return (gdf["point_in_code"] == sro_code) & (gdf["level"] == 1)
-
-    return __gda.get_features_by_condition(custom_condition)
-
-
-def get_all_cable_start_with_one_point(nap_code):
+def get_all_cables_start_with_one_point(nap_code):
+    """
+    获取指定点位为起点的所有线缆
+    :param nap_code: 根据nap_code查询
+    :return: 线缆列表
+    """
     def custom_condition(gdf):
         return gdf["point_in_code"] == nap_code
 
     return __gda.get_features_by_condition(custom_condition)
 
 
-def init_data_of_distribution_1():
+def init_data_of_all_distribution01():
+    """
+    初始化所有sro节点的skip_count值为0，in_start为0
+    """
     def custom_condition(gdf):
         return gdf["level"] == 1
 
@@ -45,6 +38,11 @@ def init_data_of_distribution_1():
 
 
 def update_skip_count_of_cable_start_with_point(start_point_code, start_point_skip_count):
+    """
+    更新起点为指定点的所有线缆的skip_count
+    :param start_point_code: 根据nap_code查询
+    :param start_point_skip_count: nap上的skip_count
+    """
     def custom_condition(gdf):
         return gdf["point_in_code"] == start_point_code
 
@@ -53,16 +51,3 @@ def update_skip_count_of_cable_start_with_point(start_point_code, start_point_sk
     if update_success:
         __gda.save_changes(overwrite=True)
 
-
-# def update(condition,filed,new_value):
-#     update_success = __gda.update_attributes(
-#         condition=lambda gdf: gdf["code"] == "SRO01-1",
-#         field="in_start",
-#         new_value=None
-#     )
-#     print(update_success)
-#     __gda.save_changes(overwrite=True)
-
-
-if __name__ == '__main__':
-    print(get_all_distribution_1())
