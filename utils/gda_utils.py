@@ -116,7 +116,7 @@ class LayerDGA:
         else:
             # 单个值（如 int/float）：非空即有效
             valid_mask = mask  # 单个值无空值问题，直接使用原始条件掩码
-        print(f"已更新 {valid_mask.sum()} 个要素的 {field} 字段（总符合条件 {mask.sum()} 个）")
+        print(f"已更新 {self.layer_name} 图层 {valid_mask.sum()} 个要素的 {field} 字段（总符合条件 {mask.sum()} 个）")
         return True
 
     def add_features(self, new_features: gpd.GeoDataFrame) -> bool:
