@@ -11,7 +11,6 @@ def _gda():
 
 __gda = _gda()
 
-
 def get_all_cables_start_with_one_point(nap_code):
     """
     获取指定点位为起点的所有线缆
@@ -19,20 +18,30 @@ def get_all_cables_start_with_one_point(nap_code):
     :return: 线缆列表
     """
     def custom_condition(gdf):
-        return gdf["point_in_code"] == nap_code
+        return gdf["origin_box"] == nap_code
 
     return __gda.get_features_by_condition(custom_condition)
+
+
+def set_extremity_by_cable_codes(code_extremity_dict):
+    for cable_code, extremity in code_extremity_dict.items():
+        def custom_condition(gdf):
+            return gdf["code"] == cable_code
+
+        __gda.update_attributes(custom_condition, field="extremity", new_value=extremity)
+    __gda.save_changes(overwrite=True)
 
 
 def init_data_of_all_distribution01():
     """
     初始化所有sro节点的skip_count值为0，in_start为0
     """
+
     def custom_condition(gdf):
         return gdf["level"] == 1
 
     update_success_1 = __gda.update_attributes(condition=custom_condition, field='skip_count', new_value=0)
-    update_success_2 = __gda.update_attributes(condition=custom_condition, field='in_start', new_value=1)
+    update_success_2 = __gda.update_attributes(condition=custom_condition, field='port_start', new_value=1)
     if update_success_1 and update_success_2:
         __gda.save_changes(overwrite=True)
 
@@ -43,11 +52,11 @@ def update_skip_count_of_cable_start_with_point(start_point_code, start_point_sk
     :param start_point_code: 根据nap_code查询
     :param start_point_skip_count: nap上的skip_count
     """
+
     def custom_condition(gdf):
-        return gdf["point_in_code"] == start_point_code
+        return gdf["origin_box"] == start_point_code
 
     update_success = __gda.update_attributes(condition=custom_condition, field='skip_count',
-                                             new_value=__gda.gdf['in_start'] + start_point_skip_count - 1)
+                                             new_value=__gda.gdf['port_start'] + start_point_skip_count - 1)
     if update_success:
         __gda.save_changes(overwrite=True)
-
