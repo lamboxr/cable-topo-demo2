@@ -11,17 +11,35 @@ def _gda():
 
 __gda = _gda()
 
+
+def get_all_cables_start_with_one_point_by_orders(nap_code, sort_by=None, ascending=True):
+    """
+    获取指定点位为起点的所有线缆,根据字段排序
+    :param nap_code: 根据nap_code查询
+    :param sort_by: 排序字段
+    :param ascending: 是否升序，默认True
+    :return: 线缆列表
+    """
+    def custom_condition(gdf):
+        return gdf["origin_box"] == nap_code
+
+    return __gda.get_features_by_condition(condition=custom_condition,sort_by=sort_by,ascending=ascending)
+
+def get_all_cables_start_with_one_point_order_by_code_asc(nap_code):
+    """
+    获取指定点位为起点的所有线缆,根据code升序
+    :param nap_code: 根据nap_code查询
+    :return: 线缆列表
+    """
+    return get_all_cables_start_with_one_point_by_orders(nap_code=nap_code,sort_by="code",ascending=True)
+
 def get_all_cables_start_with_one_point(nap_code):
     """
     获取指定点位为起点的所有线缆
     :param nap_code: 根据nap_code查询
     :return: 线缆列表
     """
-    def custom_condition(gdf):
-        return gdf["origin_box"] == nap_code
-
-    return __gda.get_features_by_condition(custom_condition)
-
+    return get_all_cables_start_with_one_point_by_orders(nap_code)
 
 def set_extremity_by_cable_codes(code_extremity_dict):
     for cable_code, extremity in code_extremity_dict.items():

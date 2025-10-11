@@ -194,10 +194,17 @@ class LayerDGA:
     # --------------------------
     # 新增：按条件查询要素集合
     # --------------------------
-    def get_features_by_condition(self, condition: Callable) -> Optional[gpd.GeoDataFrame]:
+    def get_features_by_condition(
+            self,
+            condition: Callable,
+            sort_by: Optional[str] = None,
+            ascending: bool = True
+    ) -> Optional[gpd.GeoDataFrame]:
         """
         根据条件查询要素集合（返回符合条件的GeoDataFrame，即feature集合）
         :param condition: 条件函数，接收gdf并返回布尔索引（如：lambda gdf: gdf["voltage"] > 10）
+        :param sort_by: 排序字段，默认None
+        :param ascending: 是否升序, 默认True
         :return: 符合条件的要素集合（GeoDataFrame），无结果则返回空GeoDataFrame
         """
         if self.gdf is None:
@@ -206,16 +213,40 @@ class LayerDGA:
 
         # 应用条件筛选
         filtered_gdf = self.gdf[condition(self.gdf)].copy()
+
+        # 2. 若指定排序字段，则执行排序
+        if sort_by is not None:
+            # 检查排序字段是否存在
+            if sort_by not in filtered_gdf.columns:
+                print(f"排序字段不存在：{sort_by}，将跳过排序")
+            else:
+                # 执行排序（支持空值，默认空值排在最后）
+                filtered_gdf = filtered_gdf.sort_values(
+                    by=sort_by,
+                    ascending=ascending,
+                    na_position="last"  # 空值放在最后
+                )
+                print(f"已按 {sort_by} {'升序' if ascending else '降序'} 排序")
+
         print(f"查询到 {len(filtered_gdf)} 个符合条件的要素")
         return filtered_gdf
 
     # 便捷方法：属性查询（简化常用场景）
-    def get_features_by_attribute(self, field: str, op: str, value) -> Optional[gpd.GeoDataFrame]:
+    def get_features_by_attribute(
+            self,
+            field: str,
+            op: str,
+            value,
+            sort_by: Optional[str] = None,
+            ascending: bool = True
+    ) -> Optional[gpd.GeoDataFrame]:
         """
         按属性条件查询（如：field="voltage", op=">", value=10）
         :param field: 字段名
         :param op: 运算符（">", "<", "==", "contains"等）
         :param value: 比较值
+        :param sort_by: 排序字段 默认None
+        :param ascending: 是否升序，默认True
         :return: 符合条件的要素集合
         """
         if self.gdf is None or field not in self.gdf.columns:
@@ -236,7 +267,18 @@ class LayerDGA:
             print(f"不支持的运算符：{op}")
             return None
 
+        # 应用筛选条件
         filtered_gdf = self.gdf[condition].copy()
+        # 筛选后执行排序
+        if sort_by is not None and sort_by in filtered_gdf.columns:
+            # 执行排序（支持空值，默认空值排在最后）
+            filtered_gdf = filtered_gdf.sort_values(
+                by=sort_by,
+                ascending=ascending,
+                na_position="last"  # 空值放在最后
+            )
+            print(f"已按 {sort_by} {'升序' if ascending else '降序'} 排序")
+
         print(f"属性查询到 {len(filtered_gdf)} 个要素")
         return filtered_gdf
 
@@ -314,6 +356,7 @@ class LayerDGA:
     def refresh(self):
         """重新加载图层数据（刷新缓存）"""
         self._load_layer()
+
 
 # 使用示例
 if __name__ == "__main__":

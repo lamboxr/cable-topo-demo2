@@ -189,13 +189,86 @@ B -->|cable_in（所在线缆code）| A
 
 ---
 
+
+
+[lamboxr/cable-topo-demo2](https://github.com/lamboxr/cable-topo-demo2)
+
+这个仓库就是为解析cable,nap gpkg图层，并生成逻辑topo图而创建的项目
+
+- utils.gda_utils.py的class LayerDGA 用于创建单例的图层数据服务类，用于查询修改单个gpkg文件（只有单一图层）中的单个图层
+- data_service包下的data_service_cable.py, data_service_nap.py，用于各自图层的自定义业务函数，用于查询/处理图层数据，可以根据需要进行扩展
+- init_data.py用于计算并补全cable, nap图层数据中的基础数据字段，这些数据在生成topo图中需要用到
+- gen_topo.py是个空文件，是用于将来实现创建topo图的入口脚本
+- PE.md只是用于记录我与你的对话记录的，不要作为首选参考，以我在会话中提出的需求为准
+
+先了代码结构，不要开始实施，了解清楚后，等我提需求逻辑并渐进式编码
+
+```markdown
+已了解项目结构及各模块职责：
+
+- **核心数据操作层**：`utils.gda_utils.LayerDGA` 提供单例模式的 GeoPackage 图层读写能力，包含查询、更新、保存等基础操作。
+- **业务数据服务层**：`data_service` 下的 `data_service_cable.py` 和 `data_service_nap.py` 封装了线缆和节点图层的自定义业务逻辑（如查询特定线缆、更新属性等）。
+- **数据初始化层**：`init_data.py` 负责补全拓扑计算所需的基础字段（如 `skip_count`、`extremity` 等）。
+- **拓扑生成入口**：`gen_topo.py` 作为预留入口，将用于实现逻辑拓扑图的生成逻辑。
+
+请您提出具体的拓扑图生成需求逻辑，我会基于现有结构渐进式实现代码。
+```
+
+
+
 我需要将线缆和点的连接与层级关系一excel表的形式表示逻辑拓扑图
 
-**逻辑梳理**：
+## **逻辑梳理**：
 
-1. topo图基本规则
-   - 需要占用A-G列
-   - A,C,E,G表示点对象，A列是SRO类型的盒子，C,E表示线缆上的pass_seq有值的点（例如1，2，100），G列表示PBO点
-   - B,D,F表示线缆对象，分别表示level= 1,2,3的线缆
+### **topo图基本规则**
 
-: excel表说明： - A,B,C列: code, name, parent_code,  - 一行代表一个线缆，每个线缆都有code,name - code，parent_code用于表示表内数据的层级关系, 除了根线缆没有parent, 每个线缆都有parent_code，这样就维护了线缆的家族、子家族、孙家族等等等等 需求： - 现在需要生成一个excel表，sheet页叫topo - 每一列代表一个层级的线缆：例如A列代表根线缆，B列代表parent_code=跟线缆code的线缆，以此类推 - 横向代表一个数据线缆家族的链路关系，从父-子-孙-子子孙孙一路横向排列 - 行数据之间空5行 请用python 实现， 并告知我需要安装什么依赖包
+1. 列定义：
+
+   - 占用A-G列
+
+   - 盒子对象列：A,C,E,G表示点对象，A列是SRO类型的盒子，C,E表示线缆上的Closure点，G列表示PBO点
+   - 线缆对象列：B,D,F表示线缆对象，分别表示level= 1,2,3的线缆
+
+2. 行定义:
+
+   - 每8行为一组，属于当前列为每一个对象分配的独立描绘空间
+
+3. 盒子描绘规则
+
+   - A列-SRO盒子
+
+     - 列宽：12
+
+     - 在8行描绘空间中，从第1行单元格到第4行单元格，总共4个单元格采用粗外侧线框
+     - 第1行单元格显示nap.class，加粗，水平居中；
+   - 第2行单元格显示nap.code，水平居中
+   - C/E/G列盒子
+
+     - 列宽：32
+     - 在8行描绘空间中，从第1行单元格到第4行单元格，总共4个单元格采用粗外侧线框
+     - 第1行单元格显示nap.class，加粗，水平居中；
+     - 第2行单元格值=nap.code + "    " + nap.type ，水平居中；
+     - 第4行单元格=nap.in_start + "-" +nap.in_end，水平居中
+
+4. 线缆规则描述
+
+   - B/D/F列线缆
+     - 列宽：48
+     - 在8行描绘空间中，第1行单元格，下边框加粗线框
+     - 第1行单元格显示level，根据1/2/3的值分别对应 Distribution 01/Distribution 02/Distribution 03
+     - 第2行单元格=cable.code + "    "+nap.type
+     - 第3行单元格=cable.r_nodes
+     - 第4行单元格=cable.port_start+"-"+cable.port_end
+
+5. 递归描绘函数主流程
+
+   - 传入点对象，描绘点对象本身
+   - 根据点对象查询以它为起点的所有cable对象列表，查询函数 data_service_cable.get_all_cables_start_with_one_point(nap_code)
+   - 遍历cable对象列表，循环体中逻辑
+     - 描绘当前cable对象
+     - 根据data_service_nap.get_all_points_on_cable(cable_code)
+
+   - SRO是根节点，nap图层查找所有class=SRO的点，根据编号code升序排列
+   - 遍历SRO点列表，
+   - 查找cable图层，根据cable.code=nap.cable_in查询所有cable, 根据cable.code升序排列
+   - 

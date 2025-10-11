@@ -22,14 +22,47 @@ def get_all_extremities():
     """
     return __gda.get_features_by_attribute('pass_seq', '==', 0)
 
+def get_all_sro_points_by_orders(sort_by=None, ascending=True):
+    """
+    获取所有SRO节点，根据字段排序
+    :param sort_by: 排序字段
+    :param ascending: 是否升序 默认true
+    :return: 所有SRO节点列表
+    """
+    return __gda.get_features_by_attribute(field='class', op='==', value='SRO', sort_by=sort_by, ascending=ascending)
+
+def get_all_sro_points_by_order_code_asc():
+    """
+    获取所有SRO节点，根据code升序
+    :return: 所有SRO节点列表
+    """
+    return get_all_sro_points_by_orders(sort_by="code", ascending=True)
 
 def get_all_sro_points():
     """
     获取所有SRO节点
     :return: 所有SRO节点列表
     """
-    return __gda.get_features_by_attribute('class', '==', 'SRO')
+    return get_all_sro_points_by_orders()
 
+def get_all_points_on_cable_by_orders(cable_code: str, sort_by=None, ascending=True):
+    """
+    获取指定线缆上所有掏芯节点（closure,终点）
+    :param cable_code: 根据线缆code查询
+    :param sort_by: 排序字段
+    :param ascending: 是否升序 默认true
+    :return: 所有掏芯节点列表
+    """
+    return __gda.get_features_by_attribute(field='cable_in', op='==', value=cable_code, sort_by=sort_by,
+                                           ascending=ascending)
+
+def get_all_points_on_cable_by_order_in_start_asc(cable_code: str):
+    """
+    获取指定线缆上所有掏芯节点（closure,终点）
+    :param cable_code: 根据线缆code查询
+    :return: 所有掏芯节点列表
+    """
+    return get_all_points_on_cable_by_orders(cable_code=cable_code, sort_by='in_start', ascending=True)
 
 def get_all_points_on_cable(cable_code: str):
     """
@@ -37,7 +70,7 @@ def get_all_points_on_cable(cable_code: str):
     :param cable_code: 根据线缆code查询
     :return: 所有掏芯节点列表
     """
-    return __gda.get_features_by_attribute('cable_in', '==', cable_code)
+    return get_all_points_on_cable_by_orders(cable_code=cable_code)
 
 
 def init_data_of_all_sro_points():
