@@ -153,14 +153,14 @@ def draw_closure_pbo_node(ws, start_row, nap_data, col):
 def draw_closure_pbo_node(ws, start_row, nap_data, col):
     """绘制C/E/G列的Closure/PBO节点（8行一组）"""
     # 1-4行合并，粗外侧线框
-    merge_cells(
-        ws,
-        start_row=start_row,
-        end_row=start_row + 3,
-        col=col,
-        value=None,
-        border=THICK_BORDER
-    )
+    # merge_cells(
+    #     ws,
+    #     start_row=start_row,
+    #     end_row=start_row + 3,
+    #     col=col,
+    #     value=None,
+    #     border=THICK_BORDER
+    # )
     # 第1行：nap.class（加粗居中）
     set_cell(
         ws,
@@ -300,7 +300,7 @@ def merge_cells(ws, start_row, end_row, col, value, border=None, font=None, alig
     :param align: 对齐方式
     """
     cell_range = f"{col}{start_row}:{col}{end_row}"
-    ws.merge_cells(cell_range)
+    # ws.merge_cells(cell_range)
     cell = ws[f"{col}{start_row}"]
     cell.value = value
     cell.border = border or Border()

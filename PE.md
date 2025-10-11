@@ -1120,3 +1120,160 @@ Traceback (most recent call last):
 AttributeError: 'MergedCell' object attribute 'value' is read-only
 ```
 
+system
+
+~~~markdown
+根据错误信息，代码中仍然存在**合并单元格的操作**（导致出现`MergedCell`对象）。需要彻底排查并移除所有`merge_cells`相关逻辑，确保所有单元格都是独立的。
+
+
+### 排查与修正步骤：
+
+#### 1. **彻底移除所有合并单元格代码**
+全局搜索代码中是否存在 `merge_cells` 函数调用或 `ws.merge_cells()` 原生方法，**全部删除或注释掉**。例如：
+```python
+# 彻底删除以下类似代码
+# merge_cells(ws, start_row, end_row, col, value, border)
+# ws.merge_cells(f"{col}{start_row}:{col}{end_row}")
+```
+
+
+#### 2. **修正节点绘制函数（确保无合并逻辑）**
+检查 `draw_sro_node` 和 `draw_closure_pbo_node`，确保仅对独立单元格设置边框和内容，不涉及跨行列合并：
+```python
+def draw_sro_node(ws, start_row, sro_data):
+    """绘制A列的SRO节点（8行一组，纯独立单元格）"""
+    # 第1-4行：设置粗边框（模拟盒子，每个单元格独立）
+    for row in range(start_row, start_row + 4):
+        # 为每个单元格单独设置完整边框
+        set_cell(
+            ws,
+            row=row,
+            col='A',
+            value=sro_data['class'] if row == start_row else 
+                  sro_data['code'] if row == start_row + 1 else None,
+            border=THICK_BORDER,
+            font=BOLD_FONT if row == start_row else None,
+            align=CENTER_ALIGN
+        )
+    # 第5-8行：留空（无边框）
+    for row in range(start_row + 4, start_row + 8):
+        set_cell(ws, row=row, col='A', value=None)
+    return start_row + 8
+
+
+def draw_closure_pbo_node(ws, start_row, nap_data, col):
+    """绘制C/E/G列的节点（8行一组，纯独立单元格）"""
+    for row in range(start_row, start_row + 4):
+        value = None
+        if row == start_row:
+            value = nap_data['class']
+            font = BOLD_FONT
+        elif row == start_row + 1:
+            value = f"{nap_data['code']}    {nap_data['type']}"
+            font = None
+        elif row == start_row + 3:
+            value = f"{nap_data['in_start']}-{nap_data['in_end']}"
+            font = None
+        else:  # row == start_row + 2
+            value = None
+            font = None
+        
+        set_cell(
+            ws,
+            row=row,
+            col=col,
+            value=value,
+            border=THICK_BORDER,
+            font=font,
+            align=CENTER_ALIGN
+        )
+    # 第5-8行：留空
+    for row in range(start_row + 4, start_row + 8):
+        set_cell(ws, row=row, col=col, value=None)
+    return start_row + 8
+```
+
+
+#### 3. **检查线缆绘制函数（确保无合并）**
+确保 `draw_cable` 仅操作独立单元格，不涉及合并：
+```python
+def draw_cable(ws, start_row, cable_data, level):
+    """绘制B/D/F列的线缆（8行一组，纯独立单元格）"""
+    col = LEVEL_TO_COLUMN[level]
+    level_text = {1: "Distribution 01", 2: "Distribution 02", 3: "Distribution 03"}[level]
+    
+    # 第1行：level文本（下边框加粗）
+    set_cell(
+        ws,
+        row=start_row,
+        col=col,
+        value=level_text,
+        border=CABLE_FIRST_ROW_BORDER,  # 仅下边框加粗
+        font=BOLD_FONT,
+        align=CENTER_ALIGN
+    )
+    # 第2-4行：线缆信息（无边框或默认边框）
+    set_cell(
+        ws, row=start_row + 1, col=col,
+        value=f"{cable_data['code']}    {cable_data['type']}",
+        align=CENTER_ALIGN
+    )
+    set_cell(
+        ws, row=start_row + 2, col=col,
+        value=cable_data['r_nodes'],
+        align=CENTER_ALIGN
+    )
+    set_cell(
+        ws, row=start_row + 3, col=col,
+        value=f"{cable_data['port_start']}-{cable_data['port_end']}",
+        align=CENTER_ALIGN
+    )
+    # 第5-8行：留空
+    for row in range(start_row + 4, start_row + 8):
+        set_cell(ws, row=row, col=col, value=None)
+    return start_row + 8
+```
+
+
+#### 4. **验证递归逻辑中的单元格索引**
+确保递归过程中 `current_row` 计算正确，避免不同节点/线缆的单元格范围重叠（重叠可能导致误判为合并）：
+```python
+def draw_cable_and_recurse(ws, start_row, cable_data, level):
+    current_row = draw_cable(ws, start_row, cable_data, level)  # 绘制线缆，占用8行
+    
+    points_on_cable = data_service_nap.get_all_points_on_cable_by_orders(
+        cable_code=cable_data['code'],
+        sort_by=['pass_seq'],
+        ascending=True
+    )
+    if points_on_cable is None or points_on_cable.empty:
+        return current_row
+    
+    next_col_map = {'B': 'C', 'D': 'E', 'F': 'G'}
+    next_col = next_col_map[LEVEL_TO_COLUMN[level]]
+    
+    for _, point in points_on_cable.iterrows():
+        if point['class'] in ['Closure', 'PBO']:
+            # 绘制节点，占用8行，current_row自动累加
+            current_row = draw_closure_pbo_node(ws, current_row, point, next_col)
+            
+            next_level = level + 1
+            if next_level <= 3:
+                next_cables = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc(
+                    nap_code=point['code']
+                )
+                for _, next_cable in next_cables.iterrows():
+                    # 递归绘制下一级，current_row继续累加
+                    current_row = draw_cable_and_recurse(ws, current_row, next_cable, next_level)
+    return current_row
+```
+
+
+### 关键检查点：
+1. 确保代码中**完全没有** `merge_cells` 或 `ws.merge_cells` 的调用。
+2. 所有单元格操作（`set_cell`）的 `row` 和 `col` 都是独立的，不存在重复或交叉范围。
+3. 递归过程中 `current_row` 严格按“8行一组”递增，避免不同元素的单元格重叠。
+
+按以上修改后，再次运行即可消除 `MergedCell` 只读错误。
+~~~
+
