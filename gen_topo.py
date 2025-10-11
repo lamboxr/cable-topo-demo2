@@ -131,8 +131,9 @@ def draw_closure_pbo_node(ws, start_row, nap_data, col):
                 ws,
                 row=row,
                 col=col,
-                value=None,
-                border=THICK_BORDER
+                value=f"CableIn:{nap_data['cable_in']}",
+                border=THICK_BORDER,
+                align=CENTER_ALIGN
             )
         # 第4行：nap.in_start + "-" + nap.in_end（居中）
         elif row == start_row + 3:
@@ -140,7 +141,7 @@ def draw_closure_pbo_node(ws, start_row, nap_data, col):
                 ws,
                 row=row,
                 col=col,
-                value=f"{nap_data['in_start']}-{nap_data['in_end']}",
+                value=f"InRange:{int(nap_data['in_start'])}-{int(nap_data['in_end'])}",
                 border=THICK_BORDER,
                 align=CENTER_ALIGN
             )
@@ -150,43 +151,43 @@ def draw_closure_pbo_node(ws, start_row, nap_data, col):
     return start_row + 8  # 移动到下一组
 
 
-def draw_closure_pbo_node(ws, start_row, nap_data, col):
-    """绘制C/E/G列的Closure/PBO节点（8行一组）"""
-    # 1-4行合并，粗外侧线框
-    # merge_cells(
-    #     ws,
-    #     start_row=start_row,
-    #     end_row=start_row + 3,
-    #     col=col,
-    #     value=None,
-    #     border=THICK_BORDER
-    # )
-    # 第1行：nap.class（加粗居中）
-    set_cell(
-        ws,
-        row=start_row,
-        col=col,
-        value=nap_data['class'],
-        font=BOLD_FONT,
-        align=CENTER_ALIGN
-    )
-    # 第2行：nap.code + "    " + nap.type（居中）
-    set_cell(
-        ws,
-        row=start_row + 1,
-        col=col,
-        value=f"{nap_data['code']}    {nap_data['type']}",
-        align=CENTER_ALIGN
-    )
-    # 第4行：nap.in_start + "-" + nap.in_end（居中）
-    set_cell(
-        ws,
-        row=start_row + 3,
-        col=col,
-        value=f"{nap_data['in_start']}-{nap_data['in_end']}",
-        align=CENTER_ALIGN
-    )
-    return start_row + GROUP_ROWS
+# def draw_closure_pbo_node(ws, start_row, nap_data, col):
+#     """绘制C/E/G列的Closure/PBO节点（8行一组）"""
+#     # 1-4行合并，粗外侧线框
+#     # merge_cells(
+#     #     ws,
+#     #     start_row=start_row,
+#     #     end_row=start_row + 3,
+#     #     col=col,
+#     #     value=None,
+#     #     border=THICK_BORDER
+#     # )
+#     # 第1行：nap.class（加粗居中）
+#     set_cell(
+#         ws,
+#         row=start_row,
+#         col=col,
+#         value=nap_data['class'],
+#         font=BOLD_FONT,
+#         align=CENTER_ALIGN
+#     )
+#     # 第2行：nap.code + "    " + nap.type（居中）
+#     set_cell(
+#         ws,
+#         row=start_row + 1,
+#         col=col,
+#         value=f"{nap_data['code']}    {nap_data['type']}",
+#         align=CENTER_ALIGN
+#     )
+#     # 第4行：nap.in_start + "-" + nap.in_end（居中）
+#     set_cell(
+#         ws,
+#         row=start_row + 3,
+#         col=col,
+#         value=f"{nap_data['in_start']}-{nap_data['in_end']}",
+#         align=CENTER_ALIGN
+#     )
+#     return start_row + GROUP_ROWS
 
 
 def draw_cable(ws, start_row, cable_data, level):
@@ -219,7 +220,7 @@ def draw_cable(ws, start_row, cable_data, level):
         ws,
         row=start_row + 2,
         col=col,
-        value=cable_data['r_nodes'],
+        value=f"OriginBox: {cable_data['origin_box']}    RNodes:{cable_data['r_nodes']}",
         align=CENTER_ALIGN
     )
     # 第4行：cable.port_start + "-" + cable.port_end
@@ -227,7 +228,7 @@ def draw_cable(ws, start_row, cable_data, level):
         ws,
         row=start_row + 3,
         col=col,
-        value=f"{cable_data['port_start']}-{cable_data['port_end']}",
+        value=f"PortRange:{int(cable_data['port_start'])}-{int(cable_data['port_end'])}",
         align=CENTER_ALIGN
     )
     # 第5-8行：留空
