@@ -8,6 +8,7 @@ def fill_extremity_of_all_cables():
         _dict = {}
         for idx, _nap in extremities.iterrows():
             _dict[_nap["cable_in"]] = _nap["code"]
+            print(f'======={_nap["code"]}')
         data_service_cable.set_extremity_by_cable_codes(_dict)
 
 

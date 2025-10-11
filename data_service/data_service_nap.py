@@ -22,7 +22,7 @@ def get_all_extremities():
     获取所有终点类型的节点
     :return: 终点类型的节点列表
     """
-    return __gda.get_features_by_attribute('pass_seq', '==', 0)
+    return __gda.get_features_by_attribute('pass_seq', '==', 100)
 
 def get_all_sro_points_by_orders(sort_by=None, ascending=True):
     """
