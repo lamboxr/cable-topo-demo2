@@ -31,7 +31,7 @@ def get_all_sro_points_by_orders(sort_by=None, ascending=True):
     :param ascending: 是否升序 默认true
     :return: 所有SRO节点列表
     """
-    return __gda.get_features_by_attribute(field='class', op='==x', value='SRO', sort_by=sort_by, ascending=ascending)
+    return __gda.get_features_by_attribute(field='class', op='==', value='SRO', sort_by=sort_by, ascending=ascending)
 
 def get_all_sro_points_by_order_code_asc():
     """
