@@ -590,3 +590,533 @@ system
 ```
 
 那么我们接下来能够分步骤，由框架的到细节分步骤实现需求吗？
+
+~~~markdown
+可以，我们按照“框架搭建→核心功能实现→细节完善”的步骤渐进式开发，确保每一步都可验证。以下是具体实施计划：
+
+
+### **第一步：搭建整体框架（gen_topo.py）**
+目标：确定拓扑生成的主流程，明确各模块调用关系，输出空Excel模板验证格式。
+
+#### 核心步骤：
+1. **初始化Excel工作簿**：创建工作表，设置列宽（A=12，B=48，C=32，D=48，E=32，F=48，G=32）。
+2. **定义全局变量**：记录当前行位置（用于8行一组的布局）、层级与列的映射（Level1→B列，Level2→D列，Level3→F列）。
+3. **主入口函数**：`generate_topo_excel(output_path)`，串联初始化→SRO节点处理→递归绘制的流程。
+
+#### 代码实现（gen_topo.py）：
+```python
+import openpyxl
+from openpyxl.styles import Border, Side, Font, Alignment
+from data_service import data_service_nap, data_service_cable
+
+# 全局配置
+COLUMN_WIDTHS = {
+    'A': 12,
+    'B': 48,
+    'C': 32,
+    'D': 48,
+    'E': 32,
+    'F': 48,
+    'G': 32
+}
+LEVEL_TO_COLUMN = {
+    1: 'B',
+    2: 'D',
+    3: 'F'
+}
+GROUP_ROWS = 8  # 每组占用8行
+
+
+def init_workbook():
+    """初始化Excel工作簿，设置列宽和样式基础"""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "逻辑拓扑图"
+    
+    # 设置列宽
+    for col, width in COLUMN_WIDTHS.items():
+        ws.column_dimensions[col].width = width
+    
+    return wb, ws
+
+
+def generate_topo_excel(output_path):
+    """生成拓扑Excel的主函数"""
+    wb, ws = init_workbook()
+    current_row = 1  # 起始行
+    
+    # 1. 获取所有SRO节点（根节点），按code升序
+    sro_points = data_service_nap.get_all_sro_points_by_order_code_asc()
+    if sro_points is None or sro_points.empty:
+        print("无SRO节点数据，无法生成拓扑图")
+        return
+    
+    # 2. 遍历SRO节点，递归绘制拓扑
+    for _, sro in sro_points.iterrows():
+        # 绘制SRO节点（A列）
+        current_row = draw_sro_node(ws, current_row, sro)
+        # 查询SRO节点关联的线缆（Level1），按code升序
+        cables = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc(sro['code'])
+        if cables is not None and not cables.empty:
+            for _, cable in cables.iterrows():
+                # 绘制线缆（B列，Level1）并递归处理下一级节点
+                current_row = draw_cable_and_recurse(ws, current_row, cable, level=1)
+    
+    # 保存文件
+    wb.save(output_path)
+    print(f"拓扑图已生成：{output_path}")
+
+
+# 后续步骤将实现以下占位函数
+def draw_sro_node(ws, start_row, sro_data):
+    """绘制A列的SRO节点（8行一组）"""
+    # 占位：后续实现
+    return start_row + GROUP_ROWS
+
+
+def draw_cable_and_recurse(ws, start_row, cable_data, level):
+    """绘制线缆并递归处理下一级节点"""
+    # 占位：后续实现
+    return start_row + GROUP_ROWS
+
+
+if __name__ == '__main__':
+    generate_topo_excel("拓扑图输出.xlsx")
+```
+
+
+### **第二步：实现基础样式与单元格操作**
+目标：封装Excel单元格格式设置（边框、字体、对齐方式），为绘制节点和线缆提供工具函数。
+
+#### 核心功能：
+1. **边框样式**：定义粗外侧线框（用于节点）和下边框加粗（用于线缆第一行）。
+2. **单元格合并**：实现跨多行合并（如节点的1-4行合并）。
+3. **内容填充**：设置文字居中、加粗（如SRO的class字段）。
+
+#### 代码补充（在gen_topo.py中添加工具函数）：
+```python
+# 样式定义
+THICK_BORDER = Border(
+    left=Side(style='thick'),
+    right=Side(style='thick'),
+    top=Side(style='thick'),
+    bottom=Side(style='thick')
+)
+BOTTOM_THICK_BORDER = Border(
+    bottom=Side(style='thick')
+)
+BOLD_FONT = Font(bold=True)
+CENTER_ALIGN = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+
+def merge_cells(ws, start_row, end_row, col, value, border=None, font=None, align=None):
+    """
+    合并单元格并设置内容和样式
+    :param ws: 工作表
+    :param start_row: 起始行
+    :param end_row: 结束行
+    :param col: 列标识（如'A'）
+    :param value: 单元格内容
+    :param border: 边框样式
+    :param font: 字体样式
+    :param align: 对齐方式
+    """
+    cell_range = f"{col}{start_row}:{col}{end_row}"
+    ws.merge_cells(cell_range)
+    cell = ws[f"{col}{start_row}"]
+    cell.value = value
+    cell.border = border or Border()
+    cell.font = font or Font()
+    cell.alignment = align or Alignment()
+
+
+def set_cell(ws, row, col, value, border=None, font=None, align=None):
+    """设置单个单元格内容和样式"""
+    cell = ws[f"{col}{row}"]
+    cell.value = value
+    cell.border = border or Border()
+    cell.font = font or Font()
+    cell.alignment = align or Alignment()
+```
+
+
+### **第三步：实现节点绘制函数**
+目标：完成SRO节点（A列）和Closure/PBO节点（C/E/G列）的绘制逻辑，应用样式规则。
+
+#### 代码实现（完善draw_sro_node及新增节点绘制函数）：
+```python
+def draw_sro_node(ws, start_row, sro_data):
+    """绘制A列的SRO节点（8行一组）"""
+    # 1-4行合并，粗外侧线框
+    merge_cells(
+        ws,
+        start_row=start_row,
+        end_row=start_row + 3,  # 第1-4行（索引0-3）
+        col='A',
+        value=None,
+        border=THICK_BORDER
+    )
+    # 第1行：nap.class（加粗居中）
+    set_cell(
+        ws,
+        row=start_row,
+        col='A',
+        value=sro_data['class'],
+        font=BOLD_FONT,
+        align=CENTER_ALIGN
+    )
+    # 第2行：nap.code（居中）
+    set_cell(
+        ws,
+        row=start_row + 1,
+        col='A',
+        value=sro_data['code'],
+        align=CENTER_ALIGN
+    )
+    # 5-8行留空（不合并，保持默认样式）
+    return start_row + GROUP_ROWS
+
+
+def draw_closure_pbo_node(ws, start_row, nap_data, col):
+    """绘制C/E/G列的Closure/PBO节点（8行一组）"""
+    # 1-4行合并，粗外侧线框
+    merge_cells(
+        ws,
+        start_row=start_row,
+        end_row=start_row + 3,
+        col=col,
+        value=None,
+        border=THICK_BORDER
+    )
+    # 第1行：nap.class（加粗居中）
+    set_cell(
+        ws,
+        row=start_row,
+        col=col,
+        value=nap_data['class'],
+        font=BOLD_FONT,
+        align=CENTER_ALIGN
+    )
+    # 第2行：nap.code + "    " + nap.type（居中）
+    set_cell(
+        ws,
+        row=start_row + 1,
+        col=col,
+        value=f"{nap_data['code']}    {nap_data['type']}",
+        align=CENTER_ALIGN
+    )
+    # 第4行：nap.in_start + "-" + nap.in_end（居中）
+    set_cell(
+        ws,
+        row=start_row + 3,
+        col=col,
+        value=f"{nap_data['in_start']}-{nap_data['in_end']}",
+        align=CENTER_ALIGN
+    )
+    return start_row + GROUP_ROWS
+```
+
+
+### **后续步骤预告**
+1. **实现线缆绘制函数**：处理B/D/F列的线缆（Level1-3），按规则显示level名称、code+type、r_nodes等。
+2. **完善递归逻辑**：在`draw_cable_and_recurse`中，绘制线缆后查询线缆上的点（`get_all_points_on_cable`），根据点类型（Closure/PBO）调用对应节点绘制函数，并继续递归查询下一级线缆。
+3. **处理层级与列的映射**：根据线缆level（1-3）确定对应列（B/D/F），下一级节点按规则使用C/E/G列。
+4. **测试与调整**：验证Excel格式是否符合规则，处理数据为空、层级嵌套等边界情况。
+
+是否需要继续推进第四步（线缆绘制函数）的实现？
+~~~
+
+
+
+我应用了代码，并提交了github,你可以刷新仓库读取最新代码，我执行报错如下：
+
+```markdown
+图层加载成功：cable@./gpkg/cable.gpkg，要素数：15
+
+图层加载成功：nap@./gpkg/nap.gpkg，要素数：28
+
+已按以下规则排序：code 升序
+
+查询到 2 个符合条件的要素
+
+Traceback (most recent call last):
+
+  File "E:\Workspace\MyProjects\cable-topo-demo2\gen_topo.py", line 186, in <module>
+
+​    generate_topo_excel("拓扑图输出.xlsx")
+
+  File "E:\Workspace\MyProjects\cable-topo-demo2\gen_topo.py", line 50, in generate_topo_excel
+
+​    current_row = draw_sro_node(ws, current_row, sro)
+
+  File "E:\Workspace\MyProjects\cable-topo-demo2\gen_topo.py", line 84, in draw_sro_node
+
+​    set_cell(
+
+  File "E:\Workspace\MyProjects\cable-topo-demo2\gen_topo.py", line 178, in set_cell
+
+​    cell.value = value
+
+AttributeError: 'MergedCell' object attribute 'value' is read-only
+```
+
+system
+
+~~~markdown
+根据要求调整绘制逻辑，取消单元格合并，改为对每个单元格单独设置内容和样式（保持原8行一组的布局，通过边框样式模拟“盒子”效果）。
+
+
+### 第一步：修改样式定义（适配非合并单元格）
+```python
+# 样式定义调整：为独立单元格设置完整边框
+THICK_BORDER = Border(
+    left=Side(style='thick'),
+    right=Side(style='thick'),
+    top=Side(style='thick'),
+    bottom=Side(style='thick')
+)
+# 线缆第一行下边框加粗（其他边框默认）
+CABLE_FIRST_ROW_BORDER = Border(
+    bottom=Side(style='thick')
+)
+BOLD_FONT = Font(bold=True)
+CENTER_ALIGN = Alignment(horizontal='center', vertical='center', wrap_text=True)
+```
+
+
+### 第二步：重写节点绘制函数（不合并单元格）
+```python
+def draw_sro_node(ws, start_row, sro_data):
+    """绘制A列的SRO节点（8行一组，不合并单元格）"""
+    # 第1-4行：粗外侧线框（模拟盒子）
+    for row in range(start_row, start_row + 4):  # 行索引：start_row到start_row+3
+        # 第1行：nap.class（加粗居中）
+        if row == start_row:
+            set_cell(
+                ws,
+                row=row,
+                col='A',
+                value=sro_data['class'],
+                border=THICK_BORDER,
+                font=BOLD_FONT,
+                align=CENTER_ALIGN
+            )
+        # 第2行：nap.code（居中）
+        elif row == start_row + 1:
+            set_cell(
+                ws,
+                row=row,
+                col='A',
+                value=sro_data['code'],
+                border=THICK_BORDER,
+                align=CENTER_ALIGN
+            )
+        # 第3-4行：留空（保持边框）
+        else:
+            set_cell(
+                ws,
+                row=row,
+                col='A',
+                value=None,
+                border=THICK_BORDER
+            )
+    # 第5-8行：留空（无边框）
+    for row in range(start_row + 4, start_row + 8):
+        set_cell(ws, row=row, col='A', value=None)
+    return start_row + 8  # 移动到下一组
+
+
+def draw_closure_pbo_node(ws, start_row, nap_data, col):
+    """绘制C/E/G列的Closure/PBO节点（8行一组，不合并单元格）"""
+    # 第1-4行：粗外侧线框（模拟盒子）
+    for row in range(start_row, start_row + 4):
+        # 第1行：nap.class（加粗居中）
+        if row == start_row:
+            set_cell(
+                ws,
+                row=row,
+                col=col,
+                value=nap_data['class'],
+                border=THICK_BORDER,
+                font=BOLD_FONT,
+                align=CENTER_ALIGN
+            )
+        # 第2行：nap.code + "    " + nap.type（居中）
+        elif row == start_row + 1:
+            set_cell(
+                ws,
+                row=row,
+                col=col,
+                value=f"{nap_data['code']}    {nap_data['type']}",
+                border=THICK_BORDER,
+                align=CENTER_ALIGN
+            )
+        # 第3行：留空
+        elif row == start_row + 2:
+            set_cell(
+                ws,
+                row=row,
+                col=col,
+                value=None,
+                border=THICK_BORDER
+            )
+        # 第4行：nap.in_start + "-" + nap.in_end（居中）
+        elif row == start_row + 3:
+            set_cell(
+                ws,
+                row=row,
+                col=col,
+                value=f"{nap_data['in_start']}-{nap_data['in_end']}",
+                border=THICK_BORDER,
+                align=CENTER_ALIGN
+            )
+    # 第5-8行：留空（无边框）
+    for row in range(start_row + 4, start_row + 8):
+        set_cell(ws, row=row, col=col, value=None)
+    return start_row + 8  # 移动到下一组
+```
+
+
+### 第三步：实现线缆绘制函数（不合并单元格）
+```python
+def draw_cable(ws, start_row, cable_data, level):
+    """绘制B/D/F列的线缆（8行一组，不合并单元格）"""
+    # 根据level确定列（B=1, D=2, F=3）
+    col = LEVEL_TO_COLUMN[level]
+    # level显示文本映射
+    level_text = {1: "Distribution 01", 2: "Distribution 02", 3: "Distribution 03"}[level]
+    
+    # 第1行：level文本（下边框加粗）
+    set_cell(
+        ws,
+        row=start_row,
+        col=col,
+        value=level_text,
+        border=CABLE_FIRST_ROW_BORDER,
+        font=BOLD_FONT,
+        align=CENTER_ALIGN
+    )
+    # 第2行：cable.code + "    " + cable.type
+    set_cell(
+        ws,
+        row=start_row + 1,
+        col=col,
+        value=f"{cable_data['code']}    {cable_data['type']}",
+        align=CENTER_ALIGN
+    )
+    # 第3行：cable.r_nodes
+    set_cell(
+        ws,
+        row=start_row + 2,
+        col=col,
+        value=cable_data['r_nodes'],
+        align=CENTER_ALIGN
+    )
+    # 第4行：cable.port_start + "-" + cable.port_end
+    set_cell(
+        ws,
+        row=start_row + 3,
+        col=col,
+        value=f"{cable_data['port_start']}-{cable_data['port_end']}",
+        align=CENTER_ALIGN
+    )
+    # 第5-8行：留空
+    for row in range(start_row + 4, start_row + 8):
+        set_cell(ws, row=row, col=col, value=None)
+    return start_row + 8  # 移动到下一组
+```
+
+
+### 第四步：完善递归逻辑（绘制线缆后处理下一级节点）
+```python
+def draw_cable_and_recurse(ws, start_row, cable_data, level):
+    """绘制线缆并递归处理下一级节点"""
+    # 1. 绘制当前线缆（占用8行）
+    current_row = draw_cable(ws, start_row, cable_data, level)
+    
+    # 2. 查询线缆上的点（按pass_seq顺序：中间点1-99 → 终点100）
+    points_on_cable = data_service_nap.get_all_points_on_cable_by_orders(
+        cable_code=cable_data['code'],
+        sort_by=['pass_seq'],
+        ascending=True
+    )
+    if points_on_cable is None or points_on_cable.empty:
+        return current_row
+    
+    # 3. 确定下一级节点的列（线缆列的右侧列：B→C，D→E，F→G）
+    next_col_map = {'B': 'C', 'D': 'E', 'F': 'G'}
+    next_col = next_col_map[LEVEL_TO_COLUMN[level]]
+    
+    # 4. 遍历点并绘制（每个点占用8行）
+    for _, point in points_on_cable.iterrows():
+        # 根据点类型绘制节点（Closure/PBO）
+        if point['class'] in ['Closure', 'PBO']:
+            current_row = draw_closure_pbo_node(ws, current_row, point, next_col)
+            
+            # 5. 递归查询该点作为起点的下一级线缆（level+1）
+            next_level = level + 1
+            if next_level <= 3:  # 最多到level 3
+                next_cables = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc(
+                    nap_code=point['code']
+                )
+                if next_cables is not None and not next_cables.empty:
+                    for _, next_cable in next_cables.iterrows():
+                        current_row = draw_cable_and_recurse(ws, current_row, next_cable, next_level)
+    return current_row
+```
+
+
+### 关键调整说明：
+1. **取消合并单元格**：所有内容通过独立单元格展示，避免`MergedCell`只读问题。
+2. **边框样式优化**：节点的1-4行通过`THICK_BORDER`模拟“盒子”效果，线缆第一行通过`CABLE_FIRST_ROW_BORDER`突出显示。
+3. **行布局保持**：仍采用8行一组的结构，确保节点和线缆的空间隔离。
+4. **递归逻辑适配**：绘制线缆后，查询其上的点并在右侧列（C/E/G）绘制，再递归处理下一级线缆（level+1）。
+
+接下来可以测试整体流程，验证节点、线缆的布局和层级关系是否符合预期。
+~~~
+
+
+
+我应用了新的代码，提交到了github，
+
+还是有合并单元格的错误，严格禁止任何合并单元格
+
+具体现象如下
+
+应用了如下步骤
+
+> 第一步：修改样式定义（适配非合并单元格）
+> 第二步：重写节点绘制函数（不合并单元格）
+> 第三步：实现线缆绘制函数（不合并单元格）
+
+执行后没有报错
+
+继续应用如下步骤
+
+> 第四步：完善递归逻辑（绘制线缆后处理下一级节点）
+
+执行后提示有合并单元格的问题
+
+```
+图层加载成功：cable@./gpkg/cable.gpkg，要素数：15
+图层加载成功：nap@./gpkg/nap.gpkg，要素数：28
+已按以下规则排序：code 升序
+查询到 2 个符合条件的要素
+已按以下规则排序：code 升序
+查询到 1 个符合条件的要素
+已按以下规则排序：pass_seq 升序
+查询到 5 个符合条件的要素
+Traceback (most recent call last):
+  File "E:\Workspace\MyProjects\cable-topo-demo2\gen_topo.py", line 322, in <module>
+    generate_topo_excel("拓扑图输出.xlsx")
+  File "E:\Workspace\MyProjects\cable-topo-demo2\gen_topo.py", line 56, in generate_topo_excel
+    current_row = draw_cable_and_recurse(ws, current_row, cable, level=1)
+  File "E:\Workspace\MyProjects\cable-topo-demo2\gen_topo.py", line 261, in draw_cable_and_recurse
+    current_row = draw_closure_pbo_node(ws, current_row, point, next_col)
+  File "E:\Workspace\MyProjects\cable-topo-demo2\gen_topo.py", line 174, in draw_closure_pbo_node
+    set_cell(
+  File "E:\Workspace\MyProjects\cable-topo-demo2\gen_topo.py", line 314, in set_cell
+    cell.value = value
+AttributeError: 'MergedCell' object attribute 'value' is read-only
+```
+
