@@ -32,10 +32,10 @@ def join_query():
     print(gdf_joined[["code", "cable_code"]].head())
 
 def test_sorted_query():
-    l = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc('CL11')
+    l = data_service_cable.get_all_cables_start_with_one_point_by_orders('CL11',['type','code'], ascending=False)
     if l is not None and not l.empty:
         for i, cable in l.iterrows():
-            print(f"{cable['code']} {cable['port_start']}")
+            print(f"{cable['code']} {cable['type']} ")
 
     l2 = data_service_nap.get_all_points_on_cable_by_order_in_start_asc('SRO01-1')
     if l2 is not None and not l2.empty:

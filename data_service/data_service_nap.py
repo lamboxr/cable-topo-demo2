@@ -1,3 +1,5 @@
+from typing import Optional
+
 import pandas as pd
 
 from data_service import data_service_cable
@@ -29,7 +31,7 @@ def get_all_sro_points_by_orders(sort_by=None, ascending=True):
     :param ascending: 是否升序 默认true
     :return: 所有SRO节点列表
     """
-    return __gda.get_features_by_attribute(field='class', op='==', value='SRO', sort_by=sort_by, ascending=ascending)
+    return __gda.get_features_by_attribute(field='class', op='==x', value='SRO', sort_by=sort_by, ascending=ascending)
 
 def get_all_sro_points_by_order_code_asc():
     """
@@ -45,7 +47,7 @@ def get_all_sro_points():
     """
     return get_all_sro_points_by_orders()
 
-def get_all_points_on_cable_by_orders(cable_code: str, sort_by=None, ascending=True):
+def get_all_points_on_cable_by_orders(cable_code: str, sort_by: Optional[list[str]] = None, ascending: bool | list[bool] = True):
     """
     获取指定线缆上所有掏芯节点（closure,终点）
     :param cable_code: 根据线缆code查询
@@ -62,7 +64,7 @@ def get_all_points_on_cable_by_order_in_start_asc(cable_code: str):
     :param cable_code: 根据线缆code查询
     :return: 所有掏芯节点列表
     """
-    return get_all_points_on_cable_by_orders(cable_code=cable_code, sort_by='in_start', ascending=True)
+    return get_all_points_on_cable_by_orders(cable_code=cable_code, sort_by=['in_start'], ascending=True)
 
 def get_all_points_on_cable(cable_code: str):
     """

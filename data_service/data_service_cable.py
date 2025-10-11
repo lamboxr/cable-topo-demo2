@@ -1,3 +1,5 @@
+from typing import Optional
+
 from utils import gpkg_utils
 from utils.gda_utils import LayerDGA
 
@@ -12,7 +14,7 @@ def _gda():
 __gda = _gda()
 
 
-def get_all_cables_start_with_one_point_by_orders(nap_code, sort_by=None, ascending=True):
+def get_all_cables_start_with_one_point_by_orders(nap_code, sort_by: Optional[list[str]] = None, ascending: bool | list[bool] = True):
     """
     获取指定点位为起点的所有线缆,根据字段排序
     :param nap_code: 根据nap_code查询
@@ -31,7 +33,7 @@ def get_all_cables_start_with_one_point_order_by_code_asc(nap_code):
     :param nap_code: 根据nap_code查询
     :return: 线缆列表
     """
-    return get_all_cables_start_with_one_point_by_orders(nap_code=nap_code,sort_by="code",ascending=True)
+    return get_all_cables_start_with_one_point_by_orders(nap_code=nap_code,sort_by=["code"],ascending=True)
 
 def get_all_cables_start_with_one_point(nap_code):
     """

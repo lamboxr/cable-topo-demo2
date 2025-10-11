@@ -197,36 +197,73 @@ class LayerDGA:
     def get_features_by_condition(
             self,
             condition: Callable,
-            sort_by: Optional[str] = None,
-            ascending: bool = True
+            sort_by: Optional[list[str]] = None,  # 改为列表：支持多个字段（如["level", "voltage"]）
+            ascending: bool | list[bool] = True  # 改为列表/单个布尔值：对应每个字段的排序方向
     ) -> Optional[gpd.GeoDataFrame]:
         """
-        根据条件查询要素集合（返回符合条件的GeoDataFrame，即feature集合）
-        :param condition: 条件函数，接收gdf并返回布尔索引（如：lambda gdf: gdf["voltage"] > 10）
-        :param sort_by: 排序字段，默认None
-        :param ascending: 是否升序, 默认True
-        :return: 符合条件的要素集合（GeoDataFrame），无结果则返回空GeoDataFrame
+        根据条件查询要素集合，支持按多个字段排序
+        :param condition: 筛选条件（如：lambda gdf: gdf["level"] == 1）
+        :param sort_by: 排序字段列表（如：["level", "voltage"]，None表示不排序）
+        :param ascending: 排序方向（单个布尔值或列表）：
+                          - 若为单个值：所有字段使用同一方向（True=升序，False=降序）
+                          - 若为列表：需与sort_by长度一致，分别指定每个字段的方向
+        :return: 筛选并排序后的GeoDataFrame
         """
         if self.gdf is None:
             print("图层数据为空，无法查询")
             return None
 
-        # 应用条件筛选
-        filtered_gdf = self.gdf[condition(self.gdf)].copy()
+        # 1. 执行条件函数，获取返回值
+        condition_result = condition(self.gdf)
 
-        # 2. 若指定排序字段，则执行排序
+        # 2. 检查返回值是否为None
+        if condition_result is None:
+            raise ValueError("条件函数返回了None，预期应为布尔类型的Series（布尔掩码）")
+
+        # 3. 检查返回值是否为有效的布尔掩码（pandas.Series且dtype为bool）
+        if not isinstance(condition_result, pd.Series):
+            raise TypeError(f"条件函数返回值类型错误，预期为pd.Series，实际为{type(condition_result)}")
+        if condition_result.dtype != bool:
+            raise TypeError(f"条件函数返回值应为布尔类型（bool），实际为{condition_result.dtype}")
+
+        # 4. 筛选符合条件的要素
+        filtered_gdf = self.gdf[condition_result].copy()
+        if filtered_gdf.empty:
+            print("无符合条件的要素")
+            return filtered_gdf
+
+        # 2. 处理排序逻辑
         if sort_by is not None:
-            # 检查排序字段是否存在
-            if sort_by not in filtered_gdf.columns:
-                print(f"排序字段不存在：{sort_by}，将跳过排序")
-            else:
-                # 执行排序（支持空值，默认空值排在最后）
-                filtered_gdf = filtered_gdf.sort_values(
-                    by=sort_by,
-                    ascending=ascending,
-                    na_position="last"  # 空值放在最后
-                )
-                print(f"已按 {sort_by} {'升序' if ascending else '降序'} 排序")
+            # 确保sort_by是列表（兼容单个字段传入的情况）
+            if isinstance(sort_by, str):
+                sort_by = [sort_by]
+
+            # 检查所有排序字段是否存在
+            missing_fields = [f for f in sort_by if f not in filtered_gdf.columns]
+            if missing_fields:
+                print(f"排序字段不存在：{missing_fields}，将跳过排序")
+                return filtered_gdf
+
+            # 处理排序方向（确保与sort_by长度一致）
+            if isinstance(ascending, bool):
+                # 单个布尔值：所有字段使用同一方向
+                ascending = [ascending] * len(sort_by)
+            elif len(ascending) != len(sort_by):
+                print(f"排序方向列表长度（{len(ascending)}）与字段数量（{len(sort_by)}）不匹配，将跳过排序")
+                return filtered_gdf
+
+            # 执行多字段排序
+            filtered_gdf = filtered_gdf.sort_values(
+                by=sort_by,
+                ascending=ascending,
+                na_position="last"  # 空值放在最后
+            )
+            # 打印排序信息
+            sort_info = ", ".join([
+                f"{field} {'升序' if asc else '降序'}"
+                for field, asc in zip(sort_by, ascending)
+            ])
+            print(f"已按以下规则排序：{sort_info}")
 
         print(f"查询到 {len(filtered_gdf)} 个符合条件的要素")
         return filtered_gdf
@@ -237,50 +274,40 @@ class LayerDGA:
             field: str,
             op: str,
             value,
-            sort_by: Optional[str] = None,
-            ascending: bool = True
+            sort_by: Optional[list[str]] = None,  # 多字段排序
+            ascending: bool | list[bool] = True
     ) -> Optional[gpd.GeoDataFrame]:
         """
         按属性条件查询（如：field="voltage", op=">", value=10）
         :param field: 字段名
         :param op: 运算符（">", "<", "==", "contains"等）
         :param value: 比较值
-        :param sort_by: 排序字段 默认None
-        :param ascending: 是否升序，默认True
+        :param sort_by: 排序字段列表（如：["level", "voltage"]，None表示不排序）
+        :param ascending: 排序方向（单个布尔值或列表）：
+                          - 若为单个值：所有字段使用同一方向（True=升序，False=降序）
+                          - 若为列表：需与sort_by长度一致，分别指定每个字段的方向
         :return: 符合条件的要素集合
         """
         if self.gdf is None or field not in self.gdf.columns:
             print(f"字段不存在或图层为空：{field}")
             return None
 
-        # 构建条件（支持常见运算符）
-        if op == ">":
-            condition = self.gdf[field] > value
-        elif op == "<":
-            condition = self.gdf[field] < value
-        elif op == "==":
-            condition = self.gdf[field] == value
-        elif op == "contains":
-            # 文本包含（需字段为字符串类型）
-            condition = self.gdf[field].astype(str).str.contains(str(value))
-        else:
-            print(f"不支持的运算符：{op}")
-            return None
+        def custom_condition(gdf):
+            if op == ">":
+                return gdf[field] > value
+            elif op == "<":
+                return gdf[field] < value
+            elif op == "==":
+                return gdf[field] == value
+            elif op == "contains":
+                # 文本包含（需字段为字符串类型）
+                return gdf[field].astype(str).str.contains(str(value))
+            else:
+                print(f"不支持的运算符：{op}")
+                return None
 
-        # 应用筛选条件
-        filtered_gdf = self.gdf[condition].copy()
-        # 筛选后执行排序
-        if sort_by is not None and sort_by in filtered_gdf.columns:
-            # 执行排序（支持空值，默认空值排在最后）
-            filtered_gdf = filtered_gdf.sort_values(
-                by=sort_by,
-                ascending=ascending,
-                na_position="last"  # 空值放在最后
-            )
-            print(f"已按 {sort_by} {'升序' if ascending else '降序'} 排序")
+        return self.get_features_by_condition(custom_condition, sort_by, ascending)
 
-        print(f"属性查询到 {len(filtered_gdf)} 个要素")
-        return filtered_gdf
 
     # 便捷方法：空间查询（简化常用场景）
     def get_features_by_spatial(self, spatial_op: str, geometry) -> Optional[gpd.GeoDataFrame]:
