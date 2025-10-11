@@ -36,7 +36,7 @@ def init_workbook():
 def generate_topo_excel(output_path):
     """生成拓扑Excel的主函数"""
     wb, ws = init_workbook()
-    current_row = 1  # 起始行
+    current_row = 2  # 起始行
 
     # 1. 获取所有SRO节点（根节点），按code升序
     sro_points = data_service_nap.get_all_sro_points_by_order_code_asc()
@@ -95,9 +95,9 @@ def draw_sro_node(ws, start_row, sro_data):
                 border=THICK_BORDER
             )
     # 第5-8行：留空（无边框）
-    for row in range(start_row + 4, start_row + 8):
+    for row in range(start_row + 4, start_row + GROUP_ROWS):
         set_cell(ws, row=row, col='A', value=None)
-    return start_row + 8  # 移动到下一组
+    return start_row + GROUP_ROWS  # 移动到下一组
 
 
 def draw_closure_pbo_node(ws, start_row, nap_data, col):
@@ -131,7 +131,7 @@ def draw_closure_pbo_node(ws, start_row, nap_data, col):
                 ws,
                 row=row,
                 col=col,
-                value=f"CableIn:{nap_data['cable_in']}",
+                value=f"On:{nap_data['cable_in']}",
                 border=THICK_BORDER,
                 align=CENTER_ALIGN
             )
@@ -146,49 +146,9 @@ def draw_closure_pbo_node(ws, start_row, nap_data, col):
                 align=CENTER_ALIGN
             )
     # 第5-8行：留空（无边框）
-    for row in range(start_row + 4, start_row + 8):
+    for row in range(start_row + 4, start_row + GROUP_ROWS):
         set_cell(ws, row=row, col=col, value=None)
-    return start_row + 8  # 移动到下一组
-
-
-# def draw_closure_pbo_node(ws, start_row, nap_data, col):
-#     """绘制C/E/G列的Closure/PBO节点（8行一组）"""
-#     # 1-4行合并，粗外侧线框
-#     # merge_cells(
-#     #     ws,
-#     #     start_row=start_row,
-#     #     end_row=start_row + 3,
-#     #     col=col,
-#     #     value=None,
-#     #     border=THICK_BORDER
-#     # )
-#     # 第1行：nap.class（加粗居中）
-#     set_cell(
-#         ws,
-#         row=start_row,
-#         col=col,
-#         value=nap_data['class'],
-#         font=BOLD_FONT,
-#         align=CENTER_ALIGN
-#     )
-#     # 第2行：nap.code + "    " + nap.type（居中）
-#     set_cell(
-#         ws,
-#         row=start_row + 1,
-#         col=col,
-#         value=f"{nap_data['code']}    {nap_data['type']}",
-#         align=CENTER_ALIGN
-#     )
-#     # 第4行：nap.in_start + "-" + nap.in_end（居中）
-#     set_cell(
-#         ws,
-#         row=start_row + 3,
-#         col=col,
-#         value=f"{nap_data['in_start']}-{nap_data['in_end']}",
-#         align=CENTER_ALIGN
-#     )
-#     return start_row + GROUP_ROWS
-
+    return start_row + GROUP_ROWS  # 移动到下一组
 
 def draw_cable(ws, start_row, cable_data, level):
     """绘制B/D/F列的线缆（8行一组，不合并单元格）"""
@@ -220,7 +180,7 @@ def draw_cable(ws, start_row, cable_data, level):
         ws,
         row=start_row + 2,
         col=col,
-        value=f"OriginBox: {cable_data['origin_box']}    RNodes:{cable_data['r_nodes']}",
+        value=f"From: {cable_data['origin_box']}    RNodes:{cable_data['r_nodes']}",
         align=CENTER_ALIGN
     )
     # 第4行：cable.port_start + "-" + cable.port_end
@@ -232,9 +192,9 @@ def draw_cable(ws, start_row, cable_data, level):
         align=CENTER_ALIGN
     )
     # 第5-8行：留空
-    for row in range(start_row + 4, start_row + 8):
+    for row in range(start_row + 4, start_row + GROUP_ROWS):
         set_cell(ws, row=row, col=col, value=None)
-    return start_row + 8  # 移动到下一组
+    return start_row + GROUP_ROWS  # 移动到下一组
 
 
 def draw_cable_and_recurse(ws, start_row, cable_data, level):
