@@ -2,6 +2,7 @@ import geopandas as gpd
 from typing import Optional, Dict, Callable, List
 
 import numpy as np
+from geopandas import GeoDataFrame
 from shapely.geometry import base
 import pandas as pd
 
@@ -337,7 +338,7 @@ class LayerDGA:
             field: str,
             op: str,
             value
-    ) -> int:
+    ) -> int | GeoDataFrame | None:
         """
         按属性条件统计要素数量（如：field="voltage", op=">", value=10）
         :param field: 字段名

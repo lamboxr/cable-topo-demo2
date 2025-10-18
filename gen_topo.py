@@ -20,7 +20,7 @@ LEVEL_TO_COLUMN = {
     2: 'D',
     3: 'F'
 }
-GROUP_ROWS = 7  # 每组占用8行
+GROUP_ROWS = 8  # 每组占用8行
 
 
 def init_workbook():
@@ -56,7 +56,7 @@ def generate_topo_excel(output_path):
         # 查询SRO节点关联的线缆（Level1），按code升序
         d1_cables = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc(sro['code'])
         if d1_cables is not None and len(d1_cables) > 1:
-            point_branches_start_row = current_row + 4
+            point_branches_start_row = current_row + (GROUP_ROWS - 4)
         if d1_cables is None or d1_cables.empty:
             current_row += GROUP_ROWS
             continue
@@ -84,6 +84,29 @@ def generate_topo_excel(output_path):
     # 保存文件
     wb.save(output_path)
     print(f"拓扑图已生成：{output_path}")
+
+
+def draw_start_with_a_point(ws, start_row, box_data, upper_cable_level):
+    current_row = draw_box_node(ws, start_row, box_data, upper_cable_level)
+    sub_cables = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc(box_data['code'])
+    """初始化点的分支线的描绘起止行数"""
+    point_branches_cable_start_row = current_row
+    point_branches_cable_end_row = point_branches_cable_start_row
+    if sub_cables is not None and len(sub_cables) > 1:
+        point_branches_cable_start_row = current_row + (GROUP_ROWS - 4)
+    if sub_cables is None or sub_cables.empty:
+        """如果当前点没有子线缆，行号直接下移一个描绘空间，用于描绘同级下一个点的行定位"""
+        current_row += GROUP_ROWS
+    if sub_cables is not None and not sub_cables.empty:
+
+# def init_branch_start_row(current_row):
+#     return current_row
+
+def draw_box_node(ws, start_row, box_data, upper_cable_level):
+    if box_data['class'] == 'SRO':
+        return draw_sro_node(ws, start_row, box_data)
+    else:
+        return draw_closure_pbo_node_(ws, start_row, box_data, upper_cable_level)
 
 
 def draw_sro_node(ws, start_row, sro_data):
@@ -131,6 +154,59 @@ def draw_sro_node(ws, start_row, sro_data):
     # 第5-8行：留空（无边框）
     for row in range(start_row + 4, start_row + GROUP_ROWS):
         set_cell(ws, row=row, col='A', value=None)
+    return start_row  # 移动到下一组
+
+
+def draw_closure_pbo_node_(ws, start_row, nap_data, upper_cable_level):
+    # 3. 确定下一级节点的列（线缆列的右侧列：B→C，D→E，F→G）
+    current_box_col = excel_utils.get_right_col_letter(LEVEL_TO_COLUMN[upper_cable_level])
+    """绘制C/E/G列的Closure/PBO节点（8行一组，不合并单元格）"""
+    # 第1-4行：粗外侧线框（模拟盒子）
+    for row in range(start_row, start_row + 4):
+        # 第1行：nap.class（加粗居中）
+        if row == start_row:
+            set_cell(
+                ws,
+                row=row,
+                col=current_box_col,
+                value=nap_data['class'],
+                border=BOX_1ST_ROW_BORDER,
+                font=BOLD_FONT,
+                align=CENTER_ALIGN
+            )
+        # 第2行：nap.code + "    " + nap.type（居中）
+        elif row == start_row + 1:
+            set_cell(
+                ws,
+                row=row,
+                col=current_box_col,
+                value=f"{nap_data['code']}    {nap_data['type']}",
+                border=BOX_MIDDLE_ROW_BORDER,
+                align=CENTER_ALIGN
+            )
+        # 第3行：留空
+        elif row == start_row + 2:
+            set_cell(
+                ws,
+                row=row,
+                col=current_box_col,
+                value=f"On:{nap_data['cable_in']}",
+                border=BOX_MIDDLE_ROW_BORDER,
+                align=CENTER_ALIGN
+            )
+        # 第4行：nap.in_start + "-" + nap.in_end（居中）
+        elif row == start_row + 3:
+            set_cell(
+                ws,
+                row=row,
+                col=current_box_col,
+                value=f"InRange:{int(nap_data['in_start'])}-{int(nap_data['in_end'])}",
+                border=BOX_LAST_ROW_BORDER,
+                align=CENTER_ALIGN
+            )
+    # 第5-8行：留空（无边框）
+    for row in range(start_row + 4, start_row + GROUP_ROWS):
+        set_cell(ws, row=row, col=current_box_col, value=None)
     return start_row  # 移动到下一组
 
 
@@ -337,6 +413,7 @@ def draw_cable_and_recurse(ws, start_row, cable_data, current_level, upper_level
             )
 
     return current_row
+
 
 THIN_WIDTH = 'thin'
 THICKER_WIDTH = 'medium'

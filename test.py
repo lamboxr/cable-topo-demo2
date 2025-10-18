@@ -42,5 +42,9 @@ def test_sorted_query():
         for j, nap in l2.iterrows():
             print(f"{nap['code']} {nap['in_start']}")
 
+def test_count():
+    amt = data_service_cable.cables_amt('CL051-1')
+    print(amt)
+
 if __name__ == '__main__':
-    test_sorted_query()
+    test_count()

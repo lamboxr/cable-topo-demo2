@@ -24,6 +24,7 @@ def get_all_extremities():
     """
     return __gda.get_features_by_attribute('pass_seq', '==', 100)
 
+
 def get_all_sro_points_by_orders(sort_by=None, ascending=True):
     """
     获取所有SRO节点，根据字段排序
