@@ -56,10 +56,6 @@ def set_extremity_by_cable_codes(code_extremity_dict):
         __gda.update_attributes(custom_condition, field="extremity", new_value=extremity)
     __gda.save_changes(overwrite=True)
 
-
-def cables_amt(code):
-    return __gda.get_count_by_attribute("code", "==", code)
-
 def sub_cables_amt(nap_code):
     return __gda.get_count_by_attribute("origin_box", "==", nap_code)
 
@@ -97,4 +93,4 @@ def update_skip_count_of_cable_start_with_point(start_point_code, start_point_sk
 if __name__ == '__main__':
     gpkg_cable_path = "../gpkg/cable.gpkg"
     gda = LayerDGA(gpkg_cable_path, "cable")
-    sub_cables_amt()
+    print(gda.sub_cables_amt('SRO001'))

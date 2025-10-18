@@ -43,7 +43,7 @@ def test_sorted_query():
             print(f"{nap['code']} {nap['in_start']}")
 
 def test_count():
-    amt = data_service_cable.cables_amt('CL051-1')
+    amt = data_service_cable.sub_cables_amt("SRO001")
     print(amt)
 
 if __name__ == '__main__':
