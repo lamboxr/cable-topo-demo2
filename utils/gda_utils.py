@@ -293,21 +293,77 @@ class LayerDGA:
             return None
 
         def custom_condition(gdf):
-            if op == ">":
-                return gdf[field] > value
-            elif op == "<":
-                return gdf[field] < value
-            elif op == "==":
-                return gdf[field] == value
-            elif op == "contains":
-                # 文本包含（需字段为字符串类型）
-                return gdf[field].astype(str).str.contains(str(value))
-            else:
-                print(f"不支持的运算符：{op}")
-                return None
+            return gen_condition(gdf, field, op, value)
 
         return self.get_features_by_condition(custom_condition, sort_by, ascending)
 
+    def get_count_by_condition(
+            self,
+            condition: Callable
+    ) -> Optional[gpd.GeoDataFrame]:
+        """
+        根据条件查询要素集合，支持按多个字段排序
+        :param condition: 筛选条件（如：lambda gdf: gdf["level"] == 1）
+        :param sort_by: 排序字段列表（如：["level", "voltage"]，None表示不排序）
+        :param ascending: 排序方向（单个布尔值或列表）：
+                          - 若为单个值：所有字段使用同一方向（True=升序，False=降序）
+                          - 若为列表：需与sort_by长度一致，分别指定每个字段的方向
+        :return: 筛选并排序后的GeoDataFrame
+        """
+        if self.gdf is None:
+            print("图层数据为空，无法查询")
+            return None
+
+        # 1. 执行条件函数，获取返回值
+        condition_result = condition(self.gdf)
+
+        # 2. 检查返回值是否为None
+        if condition_result is None:
+            raise ValueError("条件函数返回了None，预期应为布尔类型的Series（布尔掩码）")
+
+        # 3. 检查返回值是否为有效的布尔掩码（pandas.Series且dtype为bool）
+        if not isinstance(condition_result, pd.Series):
+            raise TypeError(f"条件函数返回值类型错误，预期为pd.Series，实际为{type(condition_result)}")
+        if condition_result.dtype != bool:
+            raise TypeError(f"条件函数返回值应为布尔类型（bool），实际为{condition_result.dtype}")
+
+        # 4. 筛选符合条件的要素
+        return condition_result.sum()
+
+
+
+    def get_count_by_attribute(
+            self,
+            field: str,
+            op: str,
+            value
+    ) -> int:
+        """
+        按属性条件统计要素数量（如：field="voltage", op=">", value=10）
+        :param field: 字段名
+        :param op: 运算符（">", "<", "==", "contains"等）
+        :param value: 比较值
+        :return: 符合条件的要素数
+        """
+        if self.gdf is None or field not in self.gdf.columns:
+            print(f"图层为空或字段不存在：{field}，计数为0")
+            return -1
+
+        # 构建属性条件（复用查询方法的逻辑）
+
+        try:
+            def custom_condition(gdf):
+                return gen_condition(gdf, field, op, value)
+
+            if custom_condition is None:
+                return -1
+            else:
+                return self.get_count_by_condition(custom_condition)
+
+
+        except Exception as e:
+            print(f"属性计数失败：{str(e)}")
+            return -1
 
     # 便捷方法：空间查询（简化常用场景）
     def get_features_by_spatial(self, spatial_op: str, geometry) -> Optional[gpd.GeoDataFrame]:
@@ -385,15 +441,35 @@ class LayerDGA:
         self._load_layer()
 
 
+def gen_condition(gdf, field, op, value):
+    if op == ">":
+        return gdf[field] > value
+    elif op == "<":
+        return gdf[field] < value
+    elif op == "==":
+        return gdf[field] == value
+    elif op == "!=":
+        return gdf[field] != value
+    elif op == "contains":
+        # 文本包含（需字段为字符串类型）
+        return gdf[field].astype(str).str.contains(str(value))
+    elif op == "in":
+        # 检查是否在列表中（如：value=[1,2,3]）
+        return gdf[field].isin(value)
+    else:
+        print(f"不支持的运算符：{op}")
+        return None
+
+
 # 使用示例
 if __name__ == "__main__":
     # 1. 创建cable图层的单例实例
-    gpkg_cable_path = "./gpkg/cable.gpkg"
+    gpkg_cable_path = "/gpkg/cable.gpkg"
     cable_dga1 = LayerDGA(gpkg_cable_path, "cable")
     cable_dga2 = LayerDGA(gpkg_cable_path, "cable")  # 同一图层，应返回同一实例
     print(f"cable实例是否相同：{cable_dga1 is cable_dga2}")  # 输出：True
 
-    gpkg_nap_path = "./gpkg/nap.gpkg"
+    gpkg_nap_path = "/gpkg/nap.gpkg"
     # 2. 创建nap图层的单例实例
     nap_dga1 = LayerDGA(gpkg_nap_path, "nap")
     nap_dga2 = LayerDGA(gpkg_nap_path, "nap")  # 同一图层，应返回同一实例
