@@ -20,7 +20,7 @@ LEVEL_TO_COLUMN = {
     2: 'D',
     3: 'F'
 }
-GROUP_ROWS = 8  # 每组占用8行
+GROUP_ROWS = 7  # 每组占用8行
 
 
 def init_workbook():
@@ -56,7 +56,7 @@ def generate_topo_excel(output_path):
         # 查询SRO节点关联的线缆（Level1），按code升序
         d1_cables = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc(sro['code'])
         if d1_cables is not None and len(d1_cables) > 1:
-            point_branches_start_row = current_row + (GROUP_ROWS - 4)
+            point_branches_start_row = current_row + 4
         if d1_cables is None or d1_cables.empty:
             current_row += GROUP_ROWS
             continue
@@ -84,114 +84,6 @@ def generate_topo_excel(output_path):
     # 保存文件
     wb.save(output_path)
     print(f"拓扑图已生成：{output_path}")
-
-
-def generate_topo_excel_(output_path):
-    """生成拓扑Excel的主函数"""
-    wb, ws = init_workbook()
-    current_row = 2  # 起始行
-
-    # 1. 获取所有SRO节点（根节点），按code升序
-    sro_points = data_service_nap.get_all_sro_points_by_order_code_asc()
-    if sro_points is None or sro_points.empty:
-        print("无SRO节点数据，无法生成拓扑图")
-        return
-
-    for _, sro in sro_points.iterrows():
-        current_row = draw_start_with_a_point(ws=ws, start_row=current_row, box_data=sro, upper_cable_level=0)
-        if data_service_cable.sub_cables_amt()
-
-    # 保存文件
-    wb.save(output_path)
-    print(f"拓扑图已生成：{output_path}")
-
-
-def draw_start_with_a_point(ws, start_row, box_data, upper_cable_level):
-    """描绘点"""
-    current_row = draw_box_node(ws, start_row, box_data, upper_cable_level)
-    """判断点是否需要描绘分支线，至少两个子线缆时，初始化点的分支线的描绘开关，与起止点行数"""
-    need_to_draw_branch_cables, point_branch_cables_start_row, point_branch_cables_end_row = does_need_to_draw_branch_cables(
-        current_row, box_data)
-    """查询子线缆列表"""
-    sub_cables = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc(box_data['code'])
-
-    if sub_cables is None or sub_cables.empty:
-        """如果当前点没有子线缆，行号直接下移一个描绘空间
-        用于描绘同级下一个点的行定位
-        或者描绘循环中最后一个点的上一级线缆的同级下一个线缆的行定位"""
-        return current_row + GROUP_ROWS
-    else:
-        sub_cable_idx = 0
-        d1_cables_size = len(sub_cables)
-        for _, cable in sub_cables.iterrows():
-            if sub_cable_idx == d1_cables_size - 1 and d1_cables_size > 1:
-                point_branch_cables_end_row = current_row + 1
-            # 绘制线缆（B列，Level1）并递归处理下一级节点
-            # current_row = draw_cable_and_recurse(ws=ws, start_row=current_row, cable_data=cable,
-            #                                      current_level=cable['level'],
-            #                                      upper_level=cable['level'] - 1)
-            """判断点是否需要描绘线缆的竖向路径，至少两个pass点时，初始化点的线缆竖向线条的描绘开关，与起止点行数"""
-            need_to_draw_cable_vertical_route_line, cable_vertical_route_start_row, cable_vertical_route_end_row = does_need_to_draw_cable_vertical_right_line(
-                current_row, cable)
-            """开始描绘线缆横向部分和自身描绘空间的右侧边框"""
-            current_row = draw_cable_(ws, start_row, cable, upper_cable_level, need_to_draw_cable_vertical_route_line)
-            """查询线缆上的掏芯点列表"""
-            sub_boxes_on_cable = data_service_nap.get_all_points_on_cable(cable['code'])
-            sub_box_idx = 0
-            if sub_boxes_on_cable is None or sub_boxes_on_cable.empty:
-                return current_row + GROUP_ROWS
-            elif len(sub_boxes_on_cable) >= 2:
-                current_row += GROUP_ROWS
-            for _, box in sub_boxes_on_cable.iterrows():
-                sub_box_idx += 1
-                draw_start_with_a_point(ws=ws, start_row=current_row, box_data=box, upper_cable_level=cable['level'])
-            if need_to_draw_cable_vertical_route_line:
-                cable_vertical_route_end_row = cable_vertical_route_start_row + sub_box_idx * GROUP_ROWS + 1
-
-                for row in range(cable_vertical_route_start_row, cable_vertical_route_end_row):
-                    set_cell(
-                        ws,
-                        row=row,
-                        col=excel_utils.get_left_col_letter(LEVEL_TO_COLUMN[cable['level']]),
-                        value="",
-                        border=CABLE_ROUTE_BORDER
-                    )
-
-            sub_cable_idx += 1
-        # if len(sub_cables) > 1:
-        #     for row in range(point_branch_cables_start_row, point_branch_cables_end_row):
-        #         set_cell(
-        #             ws,
-        #             row=row,
-        #             col="A",
-        #             value="",
-        #             border=CABLE_ROUTE_BORDER
-        #         )
-
-        return current_row
-
-
-def does_need_to_draw_branch_cables(current_row, box_data):
-    sub_cables_amt = data_service_cable.sub_cables_amt(box_data['code'])
-    if sub_cables_amt > 1:
-        return True, current_row, current_row + GROUP_ROWS + 1
-    else:
-        return False, None, None
-
-
-def does_need_to_draw_cable_vertical_right_line(current_row, cable_data):
-    sub_boxes_amt = data_service_nap.boxs_amt_on_cable(cable_data['code'])
-    if sub_boxes_amt >= 2:
-        return True, current_row + 1, current_row + GROUP_ROWS + 1
-    else:
-        return False, None, None
-
-
-def draw_box_node(ws, start_row, box_data, upper_cable_level):
-    if box_data['class'] == 'SRO':
-        return draw_sro_node(ws, start_row, box_data)
-    else:
-        return draw_closure_pbo_node_(ws, start_row, box_data, upper_cable_level)
 
 
 def draw_sro_node(ws, start_row, sro_data):
@@ -239,129 +131,6 @@ def draw_sro_node(ws, start_row, sro_data):
     # 第5-8行：留空（无边框）
     for row in range(start_row + 4, start_row + GROUP_ROWS):
         set_cell(ws, row=row, col='A', value=None)
-    return start_row  # 移动到下一组
-
-
-def draw_closure_pbo_node_(ws, start_row, nap_data, upper_cable_level):
-    # 3. 确定下一级节点的列（线缆列的右侧列：B→C，D→E，F→G）
-    current_box_col = excel_utils.get_right_col_letter(LEVEL_TO_COLUMN[upper_cable_level])
-    """绘制C/E/G列的Closure/PBO节点（8行一组，不合并单元格）"""
-    # 第1-4行：粗外侧线框（模拟盒子）
-    for row in range(start_row, start_row + 4):
-        # 第1行：nap.class（加粗居中）
-        if row == start_row:
-            set_cell(
-                ws,
-                row=row,
-                col=current_box_col,
-                value=nap_data['class'],
-                border=BOX_1ST_ROW_BORDER,
-                font=BOLD_FONT,
-                align=CENTER_ALIGN
-            )
-        # 第2行：nap.code + "    " + nap.type（居中）
-        elif row == start_row + 1:
-            set_cell(
-                ws,
-                row=row,
-                col=current_box_col,
-                value=f"{nap_data['code']}    {nap_data['type']}",
-                border=BOX_MIDDLE_ROW_BORDER,
-                align=CENTER_ALIGN
-            )
-        # 第3行：留空
-        elif row == start_row + 2:
-            set_cell(
-                ws,
-                row=row,
-                col=current_box_col,
-                value=f"On:{nap_data['cable_in']}",
-                border=BOX_MIDDLE_ROW_BORDER,
-                align=CENTER_ALIGN
-            )
-        # 第4行：nap.in_start + "-" + nap.in_end（居中）
-        elif row == start_row + 3:
-            set_cell(
-                ws,
-                row=row,
-                col=current_box_col,
-                value=f"InRange:{int(nap_data['in_start'])}-{int(nap_data['in_end'])}",
-                border=BOX_LAST_ROW_BORDER,
-                align=CENTER_ALIGN
-            )
-    # 第5-8行：留空（无边框）
-    for row in range(start_row + 4, start_row + GROUP_ROWS):
-        set_cell(ws, row=row, col=current_box_col, value=None)
-    return start_row  # 移动到下一组
-
-
-def draw_cable_(ws, start_row, cable_data, upper_cable_level, need_to_draw_cable_vertical_right_line):
-    """绘制B/D/F列的线缆（8行一组，不合并单元格）"""
-    # 根据level确定列（B=1, D=2, F=3）
-    current_level = cable_data['level']
-    col = LEVEL_TO_COLUMN[current_level]
-    # level显示文本映射
-    level_text = {1: "Distribution 01", 2: "Distribution 02", 3: "Distribution 03"}[current_level]
-
-    if current_level - upper_cable_level > 1:
-        set_cell(
-            ws,
-            row=start_row,
-            col=excel_utils.get_left_col_letter(col),
-            value="",
-            border=CABLE_FIRST_ROW_BORDER
-        )
-        set_cell(
-            ws,
-            row=start_row,
-            col=excel_utils.get_left_col_letter(col, 2),
-            value="",
-            border=CABLE_FIRST_ROW_BORDER
-        )
-    route_border = Border()
-    if need_to_draw_cable_vertical_right_line:
-        route_border = CABLE_ROUTE_BORDER
-
-    # 第1行：level文本（下边框加粗）
-    set_cell(
-        ws,
-        row=start_row,
-        col=col,
-        value=level_text,
-        border=CABLE_FIRST_ROW_BORDER,
-        font=BOLD_FONT,
-        align=CENTER_ALIGN
-    )
-    # 第2行：cable.code + "    " + cable.type
-    set_cell(
-        ws,
-        row=start_row + 1,
-        col=col,
-        value=f"{cable_data['code']}    {cable_data['type']}",
-        align=CENTER_ALIGN,
-        border=route_border
-    )
-    # 第3行：cable.r_nodes
-    set_cell(
-        ws,
-        row=start_row + 2,
-        col=col,
-        value=f"From: {cable_data['origin_box']}    RNodes:{cable_data['r_nodes']}",
-        align=CENTER_ALIGN,
-        border=route_border
-    )
-    # 第4行：cable.port_start + "-" + cable.port_end
-    set_cell(
-        ws,
-        row=start_row + 3,
-        col=col,
-        value=f"PortRange:{int(cable_data['port_start'])}-{int(cable_data['port_end'])}",
-        align=CENTER_ALIGN,
-        border=route_border
-    )
-    # 第5-8行：留空
-    for row in range(start_row + 4, start_row + GROUP_ROWS):
-        set_cell(ws, row=row, col=col, value=None, border=route_border)
     return start_row  # 移动到下一组
 
 
@@ -569,7 +338,6 @@ def draw_cable_and_recurse(ws, start_row, cable_data, current_level, upper_level
 
     return current_row
 
-
 THIN_WIDTH = 'thin'
 THICKER_WIDTH = 'medium'
 
@@ -641,5 +409,4 @@ def set_cell(ws, row, col, value, border=None, font=None, align=None):
 
 if __name__ == '__main__':
     init_data.main()
-    # generate_topo_excel("拓扑图输出.xlsx")
-    generate_topo_excel_("拓扑图输出2.xlsx")
+    generate_topo_excel("拓扑图输出.xlsx")

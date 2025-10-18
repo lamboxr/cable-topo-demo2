@@ -56,7 +56,7 @@ def set_extremity_by_cable_codes(code_extremity_dict):
         __gda.update_attributes(custom_condition, field="extremity", new_value=extremity)
     __gda.save_changes(overwrite=True)
 
-def sub_cables_amt(nap_code):
+def get_sub_cables_amt(nap_code):
     return __gda.get_count_by_attribute("origin_box", "==", nap_code)
 
 
