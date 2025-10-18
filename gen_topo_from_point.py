@@ -79,26 +79,27 @@ def draw_point_and_resources(ws, current_row, box_data, upper_cable_level):
         或者描绘循环中最后一个点的上一级线缆的同级下一个线缆的行定位"""
         return current_row + GROUP_ROWS
     else:
+        """==================子线缆描绘开始=================="""
         sub_cables_amt = len(sub_cables)
         sub_cable_idx = 0
-        """==================子线缆描绘开始=================="""
         for _, cable in sub_cables.iterrows():
-
             sub_cable_idx += 1
+            if need_to_draw_box_vertical_branch_line and sub_cable_idx == sub_cables_amt:
+                """当需要画竖向分支线，且即将开始画最后一条线缆前：画竖向分支线"""
+                draw_box_vertical_branch_line(ws=ws, upper_cable_level=upper_cable_level,
+                                              start_row=box_vertical_branch_line_start_row,
+                                              end_row=current_row + 1)
             """判断点是否需要描绘线缆的竖向路径，至少两个pass点时，初始化点的线缆竖向线条的描绘开关，与起止点行数"""
             (need_to_draw_cable_vertical_route_line,
              cable_vertical_route_start_row) = does_need_to_draw_cable_vertical_right_line(current_row, cable)
             """开始描绘线缆横向部分和自身描绘空间的右侧边框"""
             current_row = draw_cable(ws, current_row, cable, upper_cable_level,
                                      need_to_draw_cable_vertical_route_line)
-            if need_to_draw_box_vertical_branch_line and sub_cable_idx == sub_cables_amt:
-                """当需要画竖向分支线，且已经画完最后一条线缆，开始画竖向分支线"""
-                draw_box_vertical_branch_line(ws=ws, upper_cable_level=upper_cable_level,
-                                              start_row=box_vertical_branch_line_start_row,
-                                              end_row=current_row + 1)
+
 
             """==================子线缆描绘完成=================="""
 
+            """==================子线缆掏芯点开始=================="""
             """查询线缆上的掏芯点列表"""
             sub_boxes_on_cable = data_service_nap.get_all_points_on_cable(cable['code'])
 
@@ -114,22 +115,15 @@ def draw_point_and_resources(ws, current_row, box_data, upper_cable_level):
             sub_box_idx = 0
             for _, box_on_cable in sub_boxes_on_cable.iterrows():
                 sub_box_idx += 1
-                """============继续调用递归函数描绘点=============="""
-                current_row = draw_point_and_resources(ws=ws, current_row=current_row, box_data=box_on_cable,
-                                                       upper_cable_level=cable['level'])
-                if need_to_draw_cable_vertical_route_line and sub_box_idx == sub_boxes_amt - 1:
-                    """当需要画竖向路由线，且已经画完最后一个掏心点后，开始画竖向路由线"""
+                if need_to_draw_cable_vertical_route_line and sub_box_idx == sub_boxes_amt:
+                    """当需要画竖向路由线，即将画最后一个掏芯点前：开始画竖向路由线"""
                     draw_cable_vertical_route_line(ws=ws, cable=cable, start_row=cable_vertical_route_start_row,
                                                    end_row=current_row)
+                """||||||||||继续调用递归函数描绘点||||||||||"""
+                current_row = draw_point_and_resources(ws=ws, current_row=current_row, box_data=box_on_cable,
+                                                       upper_cable_level=cable['level'])
 
-                    # set_cell(
-                    #     ws,
-                    #     row=row,
-                    #     col="A" if upper_cable_level == 0 else excel_utils.get_right_col_letter(LEVEL_TO_COLUMN[upper_cable_level]),
-                    #     value="",
-                    #     border=CABLE_ROUTE_BORDER
-                    # )
-
+            """==================子线缆掏芯点结束=================="""
     return current_row
 
 
