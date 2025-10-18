@@ -1,5 +1,7 @@
 import openpyxl
 from openpyxl.styles import Border, Side, Font, Alignment
+
+import init_data
 from data_service import data_service_nap, data_service_cable
 from utils import excel_utils
 
@@ -18,7 +20,7 @@ LEVEL_TO_COLUMN = {
     2: 'D',
     3: 'F'
 }
-GROUP_ROWS = 8  # 每组占用8行
+GROUP_ROWS = 7  # 每组占用8行
 
 
 def init_workbook():
@@ -47,19 +49,37 @@ def generate_topo_excel(output_path):
 
     # 2. 遍历SRO节点，递归绘制拓扑
     for _, sro in sro_points.iterrows():
+        point_branches_start_row = current_row
+        point_branches_end_row = point_branches_start_row
         # 绘制SRO节点（A列）
         current_row = draw_sro_node(ws, current_row, sro)
         # 查询SRO节点关联的线缆（Level1），按code升序
-        cables = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc(sro['code'])
-        if cables is None or cables.empty:
+        d1_cables = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc(sro['code'])
+        if d1_cables is not None and len(d1_cables) > 1:
+            point_branches_start_row = current_row + 4
+        if d1_cables is None or d1_cables.empty:
             current_row += GROUP_ROWS
             continue
-        if cables is not None and not cables.empty:
-            for _, cable in cables.iterrows():
+        if d1_cables is not None and not d1_cables.empty:
+            d1_cable_idx = 0
+            d1_cables_size = len(d1_cables)
+            for _, cable in d1_cables.iterrows():
+                if d1_cable_idx == d1_cables_size - 1 and d1_cables_size > 1:
+                    point_branches_end_row = current_row + 1
                 # 绘制线缆（B列，Level1）并递归处理下一级节点
                 current_row = draw_cable_and_recurse(ws=ws, start_row=current_row, cable_data=cable,
                                                      current_level=cable['level'],
                                                      upper_level=cable['level'] - 1)
+                d1_cable_idx += 1
+            if len(d1_cables) > 1:
+                for row in range(point_branches_start_row, point_branches_end_row):
+                    set_cell(
+                        ws,
+                        row=row,
+                        col="A",
+                        value="",
+                        border=CABLE_ROUTE_BORDER
+                    )
 
     # 保存文件
     wb.save(output_path)
@@ -282,7 +302,7 @@ def draw_cable_and_recurse(ws, start_row, cable_data, current_level, upper_level
             sub_cables = data_service_cable.get_all_cables_start_with_one_point_order_by_code_asc(
                 nap_code=point['code']
             )
-            if len(sub_cables) > 1:
+            if sub_cables is not None and len(sub_cables) > 1:
                 point_branches_start_row = current_row + 4
             if sub_cables is None or sub_cables.empty:
                 current_row += GROUP_ROWS
@@ -388,4 +408,5 @@ def set_cell(ws, row, col, value, border=None, font=None, align=None):
 
 
 if __name__ == '__main__':
+    init_data.main()
     generate_topo_excel("拓扑图输出.xlsx")

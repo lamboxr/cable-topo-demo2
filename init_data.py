@@ -51,7 +51,10 @@ def update_skip_count():
             update_skip_count_start_with_one_point(_nap_code, _nap_skip_count)
 """==================主流程=================="""
 
-# 更新所有distribution1线缆上的掏芯点上的skip_count值
-if __name__ == '__main__':
+def main():
     init_metadata()
     update_skip_count()
+
+# 更新所有distribution1线缆上的掏芯点上的skip_count值
+if __name__ == '__main__':
+    main()
