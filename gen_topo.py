@@ -20,7 +20,7 @@ LEVEL_TO_COLUMN = {
     2: 'D',
     3: 'F'
 }
-GROUP_ROWS = 7  # 每组占用8行
+GROUP_ROWS = 8  # 每组占用8行
 
 
 def init_workbook():
